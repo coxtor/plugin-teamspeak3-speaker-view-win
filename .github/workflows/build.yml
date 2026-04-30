@@ -1,18 +1,76 @@
-# Placeholder CI. Populated once the "Open decisions" in README are
-# answered. Kept present so the directory structure is under git now.
 name: build
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
-  placeholder:
-    runs-on: ubuntu-latest
+  build-windows:
+    runs-on: windows-latest
+
     steps:
-      - name: No-op until build system is chosen
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install Qt 5.15
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: '5.15.2'
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_msvc2019_64'
+          modules: ''
+          cache: true
+
+      - name: Download TS3 Plugin SDK
+        shell: pwsh
         run: |
-          echo "Build decisions pending — see README.md 'Open decisions'."
-          echo "Once Qt vs Win32 and CMake vs MSBuild are chosen,"
-          echo "this workflow becomes a windows-latest MSVC build."
+          $ErrorActionPreference = 'Stop'
+          $url = 'https://files.teamspeak-services.com/releases/sdk/3.6.0/ts3client-pluginsdk-26.zip'
+          $zip = Join-Path $env:RUNNER_TEMP 'ts3sdk.zip'
+          try {
+              Invoke-WebRequest -Uri $url -OutFile $zip
+          } catch {
+              Write-Host "Primary SDK URL failed; user must supply sdk/ headers in the repo."
+              exit 1
+          }
+          Expand-Archive -Path $zip -DestinationPath "$env:RUNNER_TEMP\ts3sdk" -Force
+          # Flatten: the archive root usually contains the include/ dir directly.
+          $sdkRoot = Get-ChildItem "$env:RUNNER_TEMP\ts3sdk" -Directory | Select-Object -First 1
+          if (-not $sdkRoot) { $sdkRoot = Get-Item "$env:RUNNER_TEMP\ts3sdk" }
+          echo "TS3_SDK_DIR=$($sdkRoot.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "TS3 SDK at: $($sdkRoot.FullName)"
+          Get-ChildItem -Recurse "$($sdkRoot.FullName)\include" | Select-Object FullName
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          cmake -S . -B build `
+                -G "Visual Studio 17 2022" -A x64 `
+                -DTS3_SDK_DIR="$env:TS3_SDK_DIR"
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build build --config Release --parallel
+
+      - name: Stage artifact
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifact | Out-Null
+          Copy-Item build\Release\speakerview.dll artifact\
+          Copy-Item resources\speakerview.ini     artifact\
+          Get-ChildItem artifact
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: speakerview-windows-x64
+          path: artifact/
+          if-no-files-found: error
