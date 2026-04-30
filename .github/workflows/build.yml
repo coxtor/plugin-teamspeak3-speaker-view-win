@@ -1,0 +1,18 @@
+# Placeholder CI. Populated once the "Open decisions" in README are
+# answered. Kept present so the directory structure is under git now.
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: No-op until build system is chosen
+        run: |
+          echo "Build decisions pending — see README.md 'Open decisions'."
+          echo "Once Qt vs Win32 and CMake vs MSBuild are chosen,"
+          echo "this workflow becomes a windows-latest MSVC build."
