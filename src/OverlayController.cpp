@@ -45,10 +45,14 @@ OverlayController::OverlayController(QObject* parent) : QObject(parent) {
         QRect saved = cfg->windowFrame();
         const bool onScreen = frameIsOnScreen(saved);
         if (cfg->rememberFrame() && saved.isValid() && onScreen) {
-            sv_log(QStringLiteral("OverlayController: restoring saved frame %1,%2 %3x%4")
-                   .arg(saved.x()).arg(saved.y())
-                   .arg(saved.width()).arg(saved.height()));
-            m_window->setGeometry(saved);
+            // Only x/y/width are user-owned; the height auto-fits to
+            // the current row count on the first applySnapshot. Keep
+            // the currently-constructed default height for now so the
+            // window is never momentarily 1px tall.
+            sv_log(QStringLiteral("OverlayController: restoring saved position %1,%2 width=%3 (height auto-fits)")
+                   .arg(saved.x()).arg(saved.y()).arg(saved.width()));
+            m_window->move(saved.x(), saved.y());
+            m_window->resize(saved.width(), m_window->height());
         } else {
             if (saved.isValid() && !onScreen) {
                 sv_log(QStringLiteral("OverlayController: saved frame %1,%2 %3x%4 is off-screen; "
@@ -140,9 +144,16 @@ void OverlayController::toggleVisible() {
 
 void OverlayController::onWindowFrameChanged() {
     if (!m_frameArmed || !m_window) return;
+    if (m_autoSizing) return;  // our own auto-fit resize, not a user action
     ConfigModel* cfg = PluginContext::instance().config();
     if (!cfg || !cfg->rememberFrame()) return;
-    cfg->setWindowFrame(m_window->geometry());
+    // Only the user-owned axes are persisted: x, y, width. The height
+    // auto-fits to the current speaker count on every snapshot, so
+    // persisting a live height would just snapshot whatever the last
+    // talker count was. We store a stable sentinel height so the QRect
+    // stays valid for frameIsOnScreen() and round-trips through QSettings.
+    const QRect g = m_window->geometry();
+    cfg->setWindowFrame(QRect(g.x(), g.y(), g.width(), 1));
 }
 
 void OverlayController::applySnapshot(QList<SpeakerSnapshot> snapshot) {
@@ -187,9 +198,20 @@ void OverlayController::applySnapshot(QList<SpeakerSnapshot> snapshot) {
         });
     }
 
-    // Auto-fit height to contents — but only when the user is not locking
-    // the frame. Otherwise we'd fight their manual sizing on every snapshot.
-    if (!m_rememberFrame) {
+    // Grow/shrink the window to fit the current row count. We always
+    // auto-fit the height, even when rememberFrame is on — only x, y and
+    // width are user-owned. Guard m_autoSizing so the resulting
+    // moveEvent/resizeEvent doesn't get round-tripped back into
+    // settings.ini on every speaker event.
+    m_autoSizing = true;
+    const int targetH = m_window->sizeHint().height();
+    if (m_rememberFrame) {
+        const QRect g = m_window->geometry();
+        if (g.height() != targetH) {
+            m_window->setGeometry(g.x(), g.y(), g.width(), targetH);
+        }
+    } else {
         m_window->adjustSize();
     }
+    m_autoSizing = false;
 }

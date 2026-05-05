@@ -39,4 +39,9 @@ private:
     double m_fadeDuration = 2.5;
     bool m_rememberFrame = true;
     bool m_frameArmed = false;
+    // True while we're programmatically resizing the window to fit its
+    // content. The resize fires moveEvent/resizeEvent -> frameChanged;
+    // suppress persistence in that window so we don't rewrite settings.ini
+    // on every speaker event.
+    bool m_autoSizing = false;
 };
