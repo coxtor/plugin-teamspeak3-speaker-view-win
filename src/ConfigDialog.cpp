@@ -1,6 +1,7 @@
 #include "ConfigDialog.h"
 
 #include "ConfigModel.h"
+#include "NativeStyle.h"
 #include "PluginContext.h"
 
 #include <QtCore/QTimer>
@@ -30,6 +31,9 @@ void ConfigDialog::presentModal(QWidget* parent) {
 }
 
 ConfigDialog::ConfigDialog(QWidget* parent) : QDialog(parent) {
+    // See comment in OverlayWidget — override TS3's dark-Fusion defaults.
+    applyNativeWindowsLook(this);
+
     setWindowTitle(QStringLiteral("Speaker View — Settings"));
     setMinimumWidth(380);
 

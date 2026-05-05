@@ -27,6 +27,7 @@ set(SRC
     src/TS3Bridge.cpp
     src/SpeakerTracker.cpp
     src/ConfigModel.cpp
+    src/NativeStyle.cpp
     src/OverlayWidget.cpp
     src/SpeakerRowWidget.cpp
     src/OverlayController.cpp
@@ -38,6 +39,7 @@ set(HDR
     src/TS3Bridge.h
     src/SpeakerTracker.h
     src/ConfigModel.h
+    src/NativeStyle.h
     src/OverlayWidget.h
     src/SpeakerRowWidget.h
     src/OverlayController.h

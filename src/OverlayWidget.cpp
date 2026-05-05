@@ -1,9 +1,16 @@
 #include "OverlayWidget.h"
 
+#include "NativeStyle.h"
+
 #include <QtGui/QMoveEvent>
 #include <QtGui/QResizeEvent>
 
 OverlayWidget::OverlayWidget(QWidget* parent) : QWidget(parent) {
+    // TS3 forces its dark Fusion palette on every widget globally. Override
+    // on our top-level windows so Speaker View looks like a normal Windows
+    // app instead of inheriting the host's dark chrome.
+    applyNativeWindowsLook(this);
+
     setAttribute(Qt::WA_ShowWithoutActivating, true);
     setWindowTitle(QStringLiteral("Speaker View"));
     resize(260, 120);
