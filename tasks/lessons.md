@@ -39,6 +39,27 @@ Runtime dependencies must go:
 - next to `ts3client_win64.exe` itself (only works if the user also has
   write access there, which they usually don't).
 
+## MSVC without /utf-8 mangles non-ASCII string literals
+
+MSVC defaults to reading source files as the active Windows code page
+(cp1252 on most locales). Em-dashes, en-dashes, umlauts etc. embedded
+as UTF-8 in .cpp files get reinterpreted as cp1252 at compile time and
+stored as mojibake in the binary, then displayed as garbage in the UI.
+
+Fix globally in `CMakeLists.txt`: `target_compile_options(... /utf-8)`.
+This flag both reads source as UTF-8 and emits UTF-8 string literals,
+which matches what Qt expects from `QStringLiteral()`.
+
+## QStyleFactory may return nullptr — don't fall through to QPalette()
+
+On the Qt 5.15 that TS3 ships, not all native style plugins
+(`windows11`, `windowsvista`, `windows`) are guaranteed to be
+available. If `QStyleFactory::create(...)` returns nullptr for all
+candidates and the code path then does `widget->setPalette(QPalette())`
+as a fallback, the widget becomes all-black (see earlier lesson on
+default-constructed QPalette). Always guard: if no native style is
+available, leave the host's style and palette untouched.
+
 ## Two Qt-palette pitfalls when toggling display modes
 
 1. `QPalette()` (default-constructed) is not "reset to host" — it is an

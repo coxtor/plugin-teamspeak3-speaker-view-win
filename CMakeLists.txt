@@ -60,8 +60,12 @@ target_link_libraries(speakerview PRIVATE
 )
 
 if(MSVC)
+    # /utf-8 treats source files as UTF-8 and emits UTF-8 string literals.
+    # Without it, MSVC reads source as the active code page (cp1252 on most
+    # Windows installs), mangles em-dashes / umlauts / any non-ASCII, and
+    # the plugin shows mojibake in its UI.
     target_compile_options(speakerview PRIVATE
-        /W4 /permissive- /EHsc /wd4100
+        /W4 /permissive- /EHsc /wd4100 /utf-8
     )
     target_compile_definitions(speakerview PRIVATE
         _CRT_SECURE_NO_WARNINGS
