@@ -38,10 +38,8 @@ OverlayController::OverlayController(QObject* parent) : QObject(parent) {
            .arg(m_window->isVisible())
            .arg(m_window->width()).arg(m_window->height()));
 
-    m_layout = new QVBoxLayout(m_window);
-    m_layout->setContentsMargins(6, 6, 6, 6);
-    m_layout->setSpacing(4);
-    m_layout->addStretch();
+    // Rows go into the window's content layout (below its custom title bar).
+    m_layout = m_window->contentLayout();
 
     if (auto* cfg = PluginContext::instance().config()) {
         QRect saved = cfg->windowFrame();
@@ -151,7 +149,11 @@ void OverlayController::applySnapshot(QList<SpeakerSnapshot> snapshot) {
         seen.insert(s.clientID);
         SpeakerRowWidget* row = m_rowsByClient.value(s.clientID, nullptr);
         if (!row) {
-            row = new SpeakerRowWidget(s, m_showChannel, m_window);
+            // Parent to the content container (owner of m_layout), not the
+            // top-level window — otherwise rows get laid out on top of the
+            // custom title bar.
+            QWidget* contentParent = m_layout->parentWidget();
+            row = new SpeakerRowWidget(s, m_showChannel, contentParent);
             m_rowsByClient.insert(s.clientID, row);
         } else {
             row->updateSnapshot(s, m_showChannel, m_fadeDuration);
