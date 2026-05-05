@@ -64,18 +64,23 @@ Initialise effect state (opacity, labels, flags) synchronously in the
 ctor. Start animations only from subsequent update calls driven by the
 event loop, not inside the ctor.
 
-## Qt::WindowDoesNotAcceptFocus + SetWindowPos(SWP_NOACTIVATE) on show
+## Window flag set at construction must include WindowStaysOnTopHint
 
-`Qt::WindowDoesNotAcceptFocus` combined with `WA_ShowWithoutActivating`
-on a `Qt::Tool` window, plus a synchronous Win32 `SetWindowPos`
-(HWND_TOPMOST, SWP_NOACTIVATE) during the widget's first `showEvent`,
-prevents Qt's own `ShowWindow(SW_SHOW)` from ever running — the HWND is
-created but the user never sees the window.
+Previous lesson here guessed that `Qt::WindowDoesNotAcceptFocus` was
+suppressing visibility. Wrong — that was a red herring. The real reason
+the overlay never appeared after reworking the flag strategy: the
+constructor dropped `Qt::WindowStaysOnTopHint` from the flag set,
+expecting a deferred `SetWindowPos(HWND_TOPMOST)` from `showEvent` to
+compensate. On Qt 5.15 inside TS3, that deferred native apply does not
+reliably make a `Qt::Tool` window visible when `WindowStaysOnTopHint`
+wasn't part of the initial flag set.
 
-- Drop `Qt::WindowDoesNotAcceptFocus` (Qt::Tool alone is enough to stop
-  focus-stealing).
-- Defer native Win32 tweaks via `QTimer::singleShot(0, ...)` from inside
-  `showEvent` so they run after Qt's show sequence has completed.
+Ship v0.2's proven flag set at construction:
+`Qt::Tool | Qt::WindowDoesNotAcceptFocus | Qt::WindowStaysOnTopHint`
+(the WindowStaysOnTopHint conditional on the saved always-on-top pref).
+Runtime toggles of always-on-top still go through `SetWindowPos` on the
+live HWND to avoid the HWND-rebuild crash — but the *initial* state
+must be expressed via Qt flags, not backfilled via Win32 after show.
 
 ## Do not touch the Qt style/palette from inside a plugin
 

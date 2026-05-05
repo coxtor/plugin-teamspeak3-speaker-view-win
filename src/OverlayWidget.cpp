@@ -11,13 +11,15 @@
 #endif
 
 OverlayWidget::OverlayWidget(QWidget* parent) : QWidget(parent) {
-    // Qt::Tool keeps the overlay out of the taskbar and stops it stealing
-    // focus on its own. We deliberately do NOT add Qt::WindowDoesNotAcceptFocus:
-    // on Qt 5.15 Windows, combined with WA_ShowWithoutActivating and a
-    // SetWindowPos(HWND_TOPMOST, SWP_NOACTIVATE) on show, it prevents Qt's
-    // own ShowWindow(SW_SHOW) from ever making the window visible.
-    setWindowFlags(Qt::Tool);
+    // Initial window flags, set once — same flag set v0.2 used and which
+    // was proven to produce a visible window. Runtime changes to these
+    // flags via setWindowFlags() rebuild the native HWND and crash TS3
+    // when children hold running QGraphicsEffect animations, so instead
+    // runtime toggles go through Win32 APIs on the live HWND below.
     setAttribute(Qt::WA_ShowWithoutActivating, true);
+    Qt::WindowFlags f = Qt::Tool | Qt::WindowDoesNotAcceptFocus;
+    if (m_alwaysOnTop) f |= Qt::WindowStaysOnTopHint;
+    setWindowFlags(f);
     setWindowTitle(QStringLiteral("Speaker View"));
     resize(260, 120);
 }
