@@ -126,6 +126,18 @@ void OverlayController::applyConfig(const ConfigModel& cfg) {
     m_window->setClickThrough(cfg.clickThrough());
 }
 
+void OverlayController::toggleVisible() {
+    if (!m_window) return;
+    if (m_window->isVisible()) {
+        sv_log("toggleVisible: hiding overlay");
+        m_window->hide();
+    } else {
+        sv_log("toggleVisible: showing overlay");
+        m_window->show();
+        m_window->raise();
+    }
+}
+
 void OverlayController::onWindowFrameChanged() {
     if (!m_frameArmed || !m_window) return;
     ConfigModel* cfg = PluginContext::instance().config();

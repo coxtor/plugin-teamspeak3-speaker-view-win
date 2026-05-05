@@ -19,6 +19,10 @@ public:
 
     void applyConfig(const ConfigModel& cfg);
 
+    // Show the overlay if hidden, hide it otherwise. Driven by the
+    // Tools -> Plugins -> Speaker View menu entry.
+    void toggleVisible();
+
     void teardown();
 
 public slots:

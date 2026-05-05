@@ -4,6 +4,7 @@
 // to the Qt main thread.
 
 #include "ConfigDialog.h"
+#include "OverlayController.h"
 #include "PluginContext.h"
 #include "SpeakerTracker.h"
 
@@ -11,15 +12,26 @@
 #include <QtCore/QMetaObject>
 #include <QtCore/QString>
 
+#include <cstdlib>
+#include <cstring>
+
 extern "C" {
 #include "plugin_definitions.h"
 #include "teamspeak/public_definitions.h"
 #include "ts3_functions.h"
 }
 
+namespace {
+// Menu item IDs. Numbering is local to this plugin; TS3 prefixes them
+// with our registered plugin ID so there are no cross-plugin collisions.
+enum : int {
+    kMenuToggleOverlay = 1,
+};
+}
+
 #define PLUGIN_API_VERSION 26
 #define PLUGIN_NAME        "Speaker View"
-#define PLUGIN_VERSION     "0.3.0"
+#define PLUGIN_VERSION     "0.4.0"
 #define PLUGIN_AUTHOR      "plugin-teamspeak3-speaker-view-win contributors"
 #define PLUGIN_DESCRIPTION "Separate overlay window listing currently speaking members of your channel, with a configurable fade-out delay."
 
@@ -101,6 +113,52 @@ SV_EXPORT void ts3plugin_onUpdateClientEvent(uint64 serverConnectionHandlerID,
                                               const char* /*invokerUniqueIdentifier*/) {
     if (auto* t = PluginContext::instance().tracker()) {
         t->handleClientUpdate(clientID, serverConnectionHandlerID);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Plugins menu entry: a single toggle that shows/hides the overlay.
+// TS3 wires it into Tools (Extras) -> Plugins -> Speaker View.
+//
+// Memory ownership: TS3 takes ownership of the PluginMenuItem array and
+// its contents after initMenus returns, and frees them with free().
+// Allocations must therefore come from malloc, not new/new[].
+// ---------------------------------------------------------------------------
+
+namespace {
+PluginMenuItem* makeMenuItem(PluginMenuType type, int id,
+                             const char* text, const char* icon) {
+    auto* item = static_cast<PluginMenuItem*>(std::malloc(sizeof(PluginMenuItem)));
+    item->type = type;
+    item->id = id;
+    std::strncpy(item->text, text, PLUGIN_MENU_BUFSZ - 1);
+    item->text[PLUGIN_MENU_BUFSZ - 1] = '\0';
+    std::strncpy(item->icon, icon ? icon : "", PLUGIN_MENU_BUFSZ - 1);
+    item->icon[PLUGIN_MENU_BUFSZ - 1] = '\0';
+    return item;
+}
+}
+
+SV_EXPORT void ts3plugin_initMenus(struct PluginMenuItem*** menuItems, char** menuIcon) {
+    constexpr int kItemCount = 1;
+    auto* items = static_cast<PluginMenuItem**>(
+        std::malloc(sizeof(PluginMenuItem*) * (kItemCount + 1)));
+    items[0] = makeMenuItem(PLUGIN_MENU_TYPE_GLOBAL, kMenuToggleOverlay,
+                            "Toggle Speaker View", "");
+    items[kItemCount] = nullptr;  // terminator
+    *menuItems = items;
+    *menuIcon = nullptr;
+}
+
+SV_EXPORT void ts3plugin_onMenuItemEvent(uint64 /*serverConnectionHandlerID*/,
+                                         enum PluginMenuType type,
+                                         int menuItemID,
+                                         uint64 /*selectedItemID*/) {
+    if (type != PLUGIN_MENU_TYPE_GLOBAL) return;
+    if (menuItemID == kMenuToggleOverlay) {
+        if (auto* o = PluginContext::instance().overlay()) {
+            o->toggleVisible();
+        }
     }
 }
 
