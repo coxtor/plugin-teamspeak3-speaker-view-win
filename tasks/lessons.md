@@ -50,15 +50,18 @@ Fix globally in `CMakeLists.txt`: `target_compile_options(... /utf-8)`.
 This flag both reads source as UTF-8 and emits UTF-8 string literals,
 which matches what Qt expects from `QStringLiteral()`.
 
-## QStyleFactory may return nullptr — don't fall through to QPalette()
+## Don't call QWidget::setStyle() from a plugin on Qt 5.15
 
-On the Qt 5.15 that TS3 ships, not all native style plugins
-(`windows11`, `windowsvista`, `windows`) are guaranteed to be
-available. If `QStyleFactory::create(...)` returns nullptr for all
-candidates and the code path then does `widget->setPalette(QPalette())`
-as a fallback, the widget becomes all-black (see earlier lesson on
-default-constructed QPalette). Always guard: if no native style is
-available, leave the host's style and palette untouched.
+Per-widget `setStyle()` during widget construction, while the host
+application (TS3) has a different global style already installed, is
+unreliable on Qt 5.15 — the top-level window failed to appear at all,
+even with a valid QStyle pointer. Changing only the QPalette is safe
+and gets us ~95% of the "native look" anyway. Keep the host's QStyle.
+
+If a full native look is ever needed, a safer path would be to subclass
+the style via `QProxyStyle` and apply that at the QApplication level —
+but we don't control the QApplication here (TS3 does), so a hand-rolled
+light palette is the pragmatic fix.
 
 ## Two Qt-palette pitfalls when toggling display modes
 
