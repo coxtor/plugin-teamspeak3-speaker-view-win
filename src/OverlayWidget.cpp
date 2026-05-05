@@ -2,6 +2,7 @@
 
 #include "Log.h"
 
+#include <QtCore/QEvent>
 #include <QtGui/QHideEvent>
 #include <QtGui/QMouseEvent>
 #include <QtGui/QMoveEvent>
@@ -21,6 +22,62 @@
 
 namespace {
 constexpr int kTitleBarHeight = 24;
+
+// Follow the Windows 10/11 "Apps use light/dark theme" setting. Read
+// straight from the registry — Qt 5.15 has no portable dark-mode API,
+// and we don't want to pull in QtWinExtras just for this.
+bool systemUsesDarkTheme() {
+#ifdef _WIN32
+    DWORD lightMode = 1;  // default to light if the key is missing
+    DWORD sz = sizeof(lightMode);
+    HKEY key = nullptr;
+    if (::RegOpenKeyExW(HKEY_CURRENT_USER,
+            L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+            0, KEY_READ, &key) == ERROR_SUCCESS) {
+        ::RegQueryValueExW(key, L"AppsUseLightTheme", nullptr, nullptr,
+                           reinterpret_cast<LPBYTE>(&lightMode), &sz);
+        ::RegCloseKey(key);
+    }
+    return lightMode == 0;
+#else
+    return false;
+#endif
+}
+
+struct Palette {
+    QColor titleBg;
+    QColor titleText;
+    QColor contentBg;
+    QColor contentText;
+    QColor border;
+    QColor closeHover;
+    QColor closePress;
+    QColor closeGlyph;
+};
+
+Palette paletteForTheme(bool dark) {
+    Palette p;
+    // Close button hover/press match the OS-standard close glyph colors
+    // (that red is the same on light + dark Windows 11 title bars).
+    p.closeHover = QColor(0xE8, 0x11, 0x23);
+    p.closePress = QColor(0xC5, 0x0F, 0x1F);
+    if (dark) {
+        p.titleBg     = QColor(0x2D, 0x2D, 0x30);
+        p.titleText   = QColor(0xF0, 0xF0, 0xF0);
+        p.contentBg   = QColor(0x20, 0x20, 0x20);
+        p.contentText = QColor(0xF0, 0xF0, 0xF0);
+        p.border      = QColor(0x5A, 0x5A, 0x5A);
+        p.closeGlyph  = QColor(0xF0, 0xF0, 0xF0);
+    } else {
+        p.titleBg     = QColor(0xF0, 0xF0, 0xF0);
+        p.titleText   = QColor(0x1F, 0x1F, 0x1F);
+        p.contentBg   = QColor(0xFF, 0xFF, 0xFF);
+        p.contentText = QColor(0x1F, 0x1F, 0x1F);
+        p.border      = QColor(0xC8, 0xC8, 0xC8);
+        p.closeGlyph  = QColor(0x1F, 0x1F, 0x1F);
+    }
+    return p;
+}
 }
 
 OverlayWidget::OverlayWidget(QWidget* parent) : QWidget(parent) {
@@ -46,12 +103,6 @@ void OverlayWidget::buildChrome() {
     m_titleBar = new QWidget(this);
     m_titleBar->setFixedHeight(kTitleBarHeight);
     m_titleBar->setAutoFillBackground(true);
-    {
-        QPalette p = m_titleBar->palette();
-        p.setColor(QPalette::Window, QColor(45, 45, 48));
-        p.setColor(QPalette::WindowText, QColor(240, 240, 240));
-        m_titleBar->setPalette(p);
-    }
 
     auto* titleRow = new QHBoxLayout(m_titleBar);
     titleRow->setContentsMargins(8, 0, 0, 0);
@@ -63,36 +114,68 @@ void OverlayWidget::buildChrome() {
         f.setPointSizeF(f.pointSizeF() - 0.5);
         f.setWeight(QFont::Medium);
         m_titleLabel->setFont(f);
-        QPalette p = m_titleLabel->palette();
-        p.setColor(QPalette::WindowText, QColor(240, 240, 240));
-        m_titleLabel->setPalette(p);
     }
     titleRow->addWidget(m_titleLabel, /*stretch*/ 1);
 
-    auto* closeBtn = new QToolButton(m_titleBar);
-    closeBtn->setText(QStringLiteral("×"));
-    closeBtn->setFixedSize(kTitleBarHeight + 16, kTitleBarHeight);
-    closeBtn->setCursor(Qt::ArrowCursor);
-    closeBtn->setFocusPolicy(Qt::NoFocus);
-    closeBtn->setAutoRaise(true);
-    closeBtn->setStyleSheet(
-        QStringLiteral(
-            "QToolButton { color: #F0F0F0; background: transparent; border: none;"
-            "              font-size: 16px; font-weight: bold; }"
-            "QToolButton:hover   { background: #E81123; color: white; }"
-            "QToolButton:pressed { background: #C50F1F; color: white; }"));
-    connect(closeBtn, &QToolButton::clicked, this, &QWidget::hide);
-    titleRow->addWidget(closeBtn, /*stretch*/ 0);
+    m_closeBtn = new QToolButton(m_titleBar);
+    m_closeBtn->setText(QStringLiteral("×"));
+    m_closeBtn->setFixedSize(kTitleBarHeight + 16, kTitleBarHeight);
+    m_closeBtn->setCursor(Qt::ArrowCursor);
+    m_closeBtn->setFocusPolicy(Qt::NoFocus);
+    m_closeBtn->setAutoRaise(true);
+    connect(m_closeBtn, &QToolButton::clicked, this, &QWidget::hide);
+    titleRow->addWidget(m_closeBtn, /*stretch*/ 0);
 
     root->addWidget(m_titleBar);
 
     // ---- Content area ----
-    auto* content = new QWidget(this);
-    m_contentLayout = new QVBoxLayout(content);
+    m_contentPane = new QWidget(this);
+    m_contentPane->setAutoFillBackground(true);
+    m_contentLayout = new QVBoxLayout(m_contentPane);
     m_contentLayout->setContentsMargins(6, 6, 6, 6);
     m_contentLayout->setSpacing(4);
     m_contentLayout->addStretch();
-    root->addWidget(content, /*stretch*/ 1);
+    root->addWidget(m_contentPane, /*stretch*/ 1);
+
+    applyTheme();
+}
+
+void OverlayWidget::applyTheme() {
+    const Palette pal = paletteForTheme(systemUsesDarkTheme());
+    m_contentBg = pal.contentBg;
+    m_border    = pal.border;
+
+    if (m_titleBar) {
+        QPalette p = m_titleBar->palette();
+        p.setColor(QPalette::Window,     pal.titleBg);
+        p.setColor(QPalette::WindowText, pal.titleText);
+        m_titleBar->setPalette(p);
+    }
+    if (m_titleLabel) {
+        QPalette p = m_titleLabel->palette();
+        p.setColor(QPalette::WindowText, pal.titleText);
+        m_titleLabel->setPalette(p);
+    }
+    if (m_contentPane) {
+        QPalette p = m_contentPane->palette();
+        p.setColor(QPalette::Window,     pal.contentBg);
+        p.setColor(QPalette::WindowText, pal.contentText);
+        // Text role so child QLabels that inherit the palette pick it up.
+        p.setColor(QPalette::Text,       pal.contentText);
+        m_contentPane->setPalette(p);
+    }
+    if (m_closeBtn) {
+        const QString css = QStringLiteral(
+            "QToolButton { color: %1; background: transparent; border: none;"
+            "              font-size: 16px; font-weight: bold; }"
+            "QToolButton:hover   { background: %2; color: white; }"
+            "QToolButton:pressed { background: %3; color: white; }")
+            .arg(pal.closeGlyph.name(),
+                 pal.closeHover.name(),
+                 pal.closePress.name());
+        m_closeBtn->setStyleSheet(css);
+    }
+    update();
 }
 
 void OverlayWidget::setAlwaysOnTop(bool on) {
@@ -149,16 +232,14 @@ void OverlayWidget::applyClickThroughNative() {
 }
 
 void OverlayWidget::paintEvent(QPaintEvent* /*event*/) {
-    // Paint the content-area background + a subtle border. Title bar
-    // paints itself via autoFillBackground=true on a dark palette.
+    // Title bar and content pane paint themselves via autoFillBackground.
+    // We only draw a 1px outline around the whole window so its edges are
+    // clearly visible on both light and dark desktops.
     QPainter p(this);
-    const QRect contentRect = rect().adjusted(0, kTitleBarHeight, 0, 0);
-    p.fillRect(contentRect, QColor(32, 32, 32));
-
-    QPen border(QColor(90, 90, 90));
+    QPen border(m_border);
     border.setWidth(1);
     p.setPen(border);
-    // Inset by half a pen width so the 1px line lands on integer pixels.
+    p.setBrush(Qt::NoBrush);
     p.drawRect(rect().adjusted(0, 0, -1, -1));
 }
 
@@ -190,6 +271,22 @@ void OverlayWidget::mouseReleaseEvent(QMouseEvent* event) {
         return;
     }
     QWidget::mouseReleaseEvent(event);
+}
+
+bool OverlayWidget::event(QEvent* ev) {
+    // Windows posts WM_SETTINGCHANGE on light/dark theme changes; Qt
+    // surfaces these as ThemeChange / ApplicationPaletteChange. Re-apply
+    // our custom chrome's palette when either fires.
+    switch (ev->type()) {
+    case QEvent::ThemeChange:
+    case QEvent::ApplicationPaletteChange:
+    case QEvent::PaletteChange:
+        applyTheme();
+        break;
+    default:
+        break;
+    }
+    return QWidget::event(ev);
 }
 
 void OverlayWidget::showEvent(QShowEvent* event) {

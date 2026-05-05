@@ -1,9 +1,11 @@
 #pragma once
 
 #include <QtCore/QPoint>
+#include <QtGui/QColor>
 #include <QtWidgets/QWidget>
 
 class QLabel;
+class QToolButton;
 class QVBoxLayout;
 
 // Top-level overlay window. Frameless, with a custom title bar (title +
@@ -27,6 +29,7 @@ signals:
     void frameChanged();
 
 protected:
+    bool event(QEvent* event) override;
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
     void moveEvent(QMoveEvent* event) override;
@@ -41,10 +44,16 @@ private:
     void applyAlwaysOnTopNative();      // runtime toggle
     void applyClickThroughNative();     // runtime toggle
     void buildChrome();                 // title bar + content area
+    void applyTheme();                  // (re)paint palette into chrome
 
     QWidget*     m_titleBar = nullptr;
     QLabel*      m_titleLabel = nullptr;
+    QToolButton* m_closeBtn = nullptr;
+    QWidget*     m_contentPane = nullptr;
     QVBoxLayout* m_contentLayout = nullptr;
+
+    QColor m_contentBg;
+    QColor m_border;
 
     bool   m_alwaysOnTop = true;
     bool   m_clickThrough = false;
