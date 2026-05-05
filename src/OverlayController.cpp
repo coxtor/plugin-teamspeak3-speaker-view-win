@@ -44,7 +44,10 @@ void OverlayController::teardown() {
     if (m_window) {
         onWindowFrameChanged();  // flush any last move/resize
         m_window->hide();
-        m_window->deleteLater();
+        // Synchronous delete: deleteLater() would be dispatched after TS3
+        // unloads our DLL on "Reload All", leading to a crash in the event
+        // loop. Rows are children of m_window and go with it.
+        delete m_window;
         m_window = nullptr;
     }
     m_rowsByClient.clear();

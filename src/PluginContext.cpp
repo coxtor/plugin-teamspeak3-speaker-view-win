@@ -32,42 +32,44 @@ void PluginContext::setupOnInit() {
     m_bridge = new TS3Bridge(this);
     m_tracker = new SpeakerTracker(this);
 
-    // UI must live on the main (Qt GUI) thread. TS3 runs our code on the
-    // main thread for init, but we still defer overlay construction to the
-    // event loop so the host's QApplication is fully wired up.
-    QTimer::singleShot(0, this, [this]() {
-        m_overlay = new OverlayController(this);
-        m_overlay->applyConfig(*m_config);
+    // UI on main (Qt GUI) thread. TS3 calls init on main, but we still build
+    // the overlay synchronously — a QTimer::singleShot with a DLL-local lambda
+    // is a dangling-code hazard if the user clicks "Reload All" before the
+    // timer fires.
+    m_overlay = new OverlayController(this);
+    m_overlay->applyConfig(*m_config);
 
-        QObject::connect(m_tracker, &SpeakerTracker::snapshotReady,
-                         m_overlay, &OverlayController::applySnapshot,
-                         Qt::QueuedConnection);
-        QObject::connect(m_config, &ConfigModel::changed,
-                         m_overlay, [this]() { m_overlay->applyConfig(*m_config); });
-        QObject::connect(m_config, &ConfigModel::changed,
-                         m_tracker, &SpeakerTracker::configChanged);
-    });
+    QObject::connect(m_tracker, &SpeakerTracker::snapshotReady,
+                     m_overlay, &OverlayController::applySnapshot,
+                     Qt::QueuedConnection);
+    QObject::connect(m_config, &ConfigModel::changed,
+                     m_overlay, [this]() { m_overlay->applyConfig(*m_config); });
+    QObject::connect(m_config, &ConfigModel::changed,
+                     m_tracker, &SpeakerTracker::configChanged);
 
     sv_log("Plugin initialised");
 }
 
 void PluginContext::teardownOnShutdown() {
+    // Synchronous delete only. deleteLater() crashes TS3 on "Reload All":
+    // TS3 unloads our DLL right after shutdown(), then Qt's event loop
+    // later tries to dispatch the queued delete-events into freed code.
     if (m_overlay) {
         m_overlay->teardown();
-        m_overlay->deleteLater();
+        delete m_overlay;
         m_overlay = nullptr;
     }
     if (m_tracker) {
         m_tracker->teardown();
-        m_tracker->deleteLater();
+        delete m_tracker;
         m_tracker = nullptr;
     }
     if (m_config) {
-        m_config->deleteLater();
+        delete m_config;
         m_config = nullptr;
     }
     if (m_bridge) {
-        m_bridge->deleteLater();
+        delete m_bridge;
         m_bridge = nullptr;
     }
     m_configDialog = nullptr;

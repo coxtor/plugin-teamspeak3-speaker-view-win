@@ -8,6 +8,23 @@ implementation (SDK layout, two-SDK confusion, VAD gaps, phantom
 `../plugin-teamspeak3-speaker-view/tasks/lessons.md`. Those apply
 identically on Windows.
 
+## Never use deleteLater() / deferred work in ts3plugin_shutdown
+
+TS3 unloads the plugin DLL **immediately** after `ts3plugin_shutdown`
+returns. Any queued events targeting code that lives in the DLL —
+`QObject::deleteLater()`, `QTimer::singleShot(...)` with a DLL-local
+lambda, `Qt::QueuedConnection` signals — will later be dispatched into
+freed memory and crash TS3. Reproduce: Tools → Options → Addons →
+Plugins → "Reload All".
+
+Shutdown must be fully synchronous:
+- `delete m_widget;` (not `deleteLater()`)
+- Before delete, widget must `hide()` and flush any pending state
+- Rows/children get cleaned up transitively by parent deletion
+
+During normal runtime `deleteLater()` is still fine — the DLL is alive
+and the event loop can dispatch.
+
 ## TS3 scans every .dll in plugins/ for ts3plugin_* exports
 
 Do not ship companion DLLs (VC runtime, Qt redistributables, helper libs)
