@@ -61,7 +61,9 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path artifact | Out-Null
-          Copy-Item build\Release\speakerview.dll artifact\
+          # speakerview.dll + MSVC runtime DLLs (VCRUNTIME140*.dll, MSVCP140*.dll)
+          # are all produced into build\Release by the POST_BUILD step.
+          Copy-Item build\Release\*.dll           artifact\
           Copy-Item resources\speakerview.ini     artifact\
           Get-ChildItem artifact
 
@@ -69,14 +71,14 @@ jobs:
         shell: pwsh
         # A .ts3_plugin is just a ZIP with:
         #   /package.ini          — plugin metadata at root
-        #   /plugins/*.dll        — the plugin binary (x64)
+        #   /plugins/*.dll        — the plugin binary + bundled MSVC runtime
         # Renaming the ZIP to .ts3_plugin lets Windows users double-click
         # to invoke the TS3 Addon Installer instead of copying files by hand.
         run: |
           $stage = 'ts3_plugin_stage'
           New-Item -ItemType Directory -Force -Path "$stage\plugins" | Out-Null
           Copy-Item resources\speakerview.ini    "$stage\package.ini"
-          Copy-Item build\Release\speakerview.dll "$stage\plugins\"
+          Copy-Item build\Release\*.dll          "$stage\plugins\"
           $version = (Select-String -Path resources\speakerview.ini -Pattern '^\s*Version\s*=\s*(.+)$').Matches.Groups[1].Value.Trim()
           $outName = "speakerview-$version.ts3_plugin"
           # .ts3_plugin is a plain ZIP; Compress-Archive needs .zip extension, rename after.
