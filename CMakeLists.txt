@@ -76,25 +76,14 @@ set_target_properties(speakerview PROPERTIES
 
 # Copy plugin .ini alongside the DLL so both can be grabbed from the same
 # CI artifact folder.
+# NOTE: We do NOT bundle the MSVC runtime DLLs here. TS3 scans every .dll
+# in its plugins/ directory for the ts3plugin_* exports, so shipping the
+# VC runtime alongside would cause 8 bogus "plugin function not found"
+# errors on every TS3 launch. Users must install the official
+# VC++ 2015–2022 x64 redistributable (aka.ms/vs/17/release/vc_redist.x64.exe)
+# — see README.
 add_custom_command(TARGET speakerview POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_SOURCE_DIR}/resources/speakerview.ini"
         "$<TARGET_FILE_DIR:speakerview>/speakerview.ini"
 )
-
-# Bundle the MSVC runtime redistributable DLLs next to speakerview.dll so
-# the plugin loads even on TS3 installations without the VC++ redist
-# installed. TS3 itself ships without these DLLs on some user machines,
-# which triggers STATUS_INVALID_IMAGE_FORMAT (0xc0000020) at load time.
-# We stick to /MD (dynamic CRT) to stay heap-compatible with Qt.
-if(MSVC)
-    set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP TRUE)
-    include(InstallRequiredSystemLibraries)
-    foreach(dll ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS})
-        add_custom_command(TARGET speakerview POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${dll}"
-                "$<TARGET_FILE_DIR:speakerview>/"
-        )
-    endforeach()
-endif()

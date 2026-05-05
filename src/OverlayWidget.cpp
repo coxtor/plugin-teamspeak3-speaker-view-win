@@ -5,9 +5,7 @@
 #include <QtGui/QResizeEvent>
 
 OverlayWidget::OverlayWidget(QWidget* parent) : QWidget(parent) {
-    setAttribute(Qt::WA_TranslucentBackground, true);
     setAttribute(Qt::WA_ShowWithoutActivating, true);
-    setAutoFillBackground(false);
     setWindowTitle(QStringLiteral("Speaker View"));
     resize(260, 120);
     applyWindowFlags();
@@ -38,21 +36,30 @@ void OverlayWidget::applyWindowFlags() {
 
     Qt::WindowFlags f = Qt::Tool | Qt::WindowDoesNotAcceptFocus;
     if (m_alwaysOnTop) f |= Qt::WindowStaysOnTopHint;
-    if (m_borderless) {
-        f |= Qt::FramelessWindowHint;
-    } else {
-        // A normal tool window still has its small title bar + close button.
-    }
+    if (m_borderless) f |= Qt::FramelessWindowHint;
     setWindowFlags(f);
+
+    // Translucent background is only composited by DWM for frameless windows.
+    // If we set WA_TranslucentBackground on a normal tool window, Windows
+    // renders the client area as opaque black — and our paintEvent's
+    // semi-transparent overlay on top of that gives a solid black box.
+    setAttribute(Qt::WA_TranslucentBackground, m_borderless);
+    setAutoFillBackground(!m_borderless);
 
     if (geo.isValid()) setGeometry(geo);
     if (visible) show();
+    update();
 }
 
-void OverlayWidget::paintEvent(QPaintEvent* /*event*/) {
+void OverlayWidget::paintEvent(QPaintEvent* event) {
+    if (!m_borderless) {
+        // Normal tool window: let Qt paint its native background; do nothing.
+        QWidget::paintEvent(event);
+        return;
+    }
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
-    QColor bg(20, 20, 20, 200);  // semi-transparent dark, HUD-like
+    QColor bg(20, 20, 20, 200);  // semi-transparent dark HUD, only when frameless
     p.setBrush(bg);
     p.setPen(Qt::NoPen);
     p.drawRoundedRect(rect().adjusted(0, 0, -1, -1), 8, 8);
