@@ -1,20 +1,14 @@
 #include "PluginContext.h"
 
 #include "ConfigModel.h"
+#include "Log.h"
 #include "OverlayController.h"
 #include "SpeakerTracker.h"
 #include "TS3Bridge.h"
 
 #include <QtCore/QCoreApplication>
-#include <QtCore/QTimer>
-
-extern "C" {
-#include "plugin_definitions.h"
-#include "teamspeak/public_definitions.h"
-#include "ts3_functions.h"
-}
-
-static void sv_log(const char* msg);
+#include <QtCore/QThread>
+#include <QtWidgets/QApplication>
 
 PluginContext& PluginContext::instance() {
     static PluginContext ctx;
@@ -26,18 +20,23 @@ void PluginContext::setTS3Functions(const TS3Functions* fns) {
 }
 
 void PluginContext::setupOnInit() {
+    sv_log(QStringLiteral("setupOnInit: enter. qApp=%1 thread=%2 mainThread=%3")
+           .arg(qApp ? QStringLiteral("present") : QStringLiteral("NULL"))
+           .arg(reinterpret_cast<quintptr>(QThread::currentThread()), 0, 16)
+           .arg(qApp ? reinterpret_cast<quintptr>(qApp->thread()) : 0, 0, 16));
+
     m_config = new ConfigModel(this);
     m_config->load();
+    sv_log("setupOnInit: config loaded");
 
     m_bridge = new TS3Bridge(this);
     m_tracker = new SpeakerTracker(this);
+    sv_log("setupOnInit: bridge + tracker created");
 
-    // UI on main (Qt GUI) thread. TS3 calls init on main, but we still build
-    // the overlay synchronously — a QTimer::singleShot with a DLL-local lambda
-    // is a dangling-code hazard if the user clicks "Reload All" before the
-    // timer fires.
     m_overlay = new OverlayController(this);
+    sv_log("setupOnInit: OverlayController constructed");
     m_overlay->applyConfig(*m_config);
+    sv_log("setupOnInit: overlay applyConfig done");
 
     QObject::connect(m_tracker, &SpeakerTracker::snapshotReady,
                      m_overlay, &OverlayController::applySnapshot,
@@ -47,7 +46,7 @@ void PluginContext::setupOnInit() {
     QObject::connect(m_config, &ConfigModel::changed,
                      m_tracker, &SpeakerTracker::configChanged);
 
-    sv_log("Plugin initialised");
+    sv_log("setupOnInit: exit. Plugin initialised");
 }
 
 void PluginContext::teardownOnShutdown() {
@@ -75,11 +74,4 @@ void PluginContext::teardownOnShutdown() {
     m_configDialog = nullptr;
     m_pluginID.clear();
     sv_log("Plugin shut down");
-}
-
-static void sv_log(const char* msg) {
-    const TS3Functions* fns = PluginContext::instance().ts3Functions();
-    if (fns && fns->logMessage) {
-        fns->logMessage(msg, LogLevel_INFO, "speakerview", 0);
-    }
 }

@@ -1,6 +1,7 @@
 #include "OverlayController.h"
 
 #include "ConfigModel.h"
+#include "Log.h"
 #include "OverlayWidget.h"
 #include "PluginContext.h"
 #include "SpeakerRowWidget.h"
@@ -10,30 +11,64 @@
 #include <QtWidgets/QVBoxLayout>
 
 OverlayController::OverlayController(QObject* parent) : QObject(parent) {
+    sv_log("OverlayController: constructing OverlayWidget");
     m_window = new OverlayWidget();
+    sv_log(QStringLiteral("OverlayController: OverlayWidget constructed, flags=0x%1 attrs: visible=%2 size=%3x%4")
+           .arg(static_cast<quint32>(m_window->windowFlags()), 0, 16)
+           .arg(m_window->isVisible())
+           .arg(m_window->width()).arg(m_window->height()));
+
     m_layout = new QVBoxLayout(m_window);
     m_layout->setContentsMargins(6, 6, 6, 6);
     m_layout->setSpacing(4);
     m_layout->addStretch();
 
-    // Restore saved frame if any.
     if (auto* cfg = PluginContext::instance().config()) {
         QRect saved = cfg->windowFrame();
         if (cfg->rememberFrame() && saved.isValid()) {
+            sv_log(QStringLiteral("OverlayController: restoring saved frame %1,%2 %3x%4")
+                   .arg(saved.x()).arg(saved.y())
+                   .arg(saved.width()).arg(saved.height()));
             m_window->setGeometry(saved);
         } else {
+            sv_log("OverlayController: no saved frame; moving to 120,120");
             m_window->move(120, 120);
         }
+    } else {
+        sv_log("OverlayController: WARNING no config available at construction");
     }
 
+    sv_log("OverlayController: calling m_window->show()");
     m_window->show();
+    sv_log(QStringLiteral("OverlayController: after show(): visible=%1 geom=%2,%3 %4x%5 winId=0x%6")
+           .arg(m_window->isVisible())
+           .arg(m_window->x()).arg(m_window->y())
+           .arg(m_window->width()).arg(m_window->height())
+           .arg(reinterpret_cast<quintptr>(m_window->winId()), 0, 16));
 
     connect(m_window, &OverlayWidget::frameChanged,
             this, &OverlayController::onWindowFrameChanged);
 
-    // Arm frame persistence after the current event loop turn, so the initial
-    // setGeometry doesn't get persisted back on top of nothing.
-    QTimer::singleShot(0, this, [this]() { m_frameArmed = true; });
+    QTimer::singleShot(0, this, [this]() {
+        m_frameArmed = true;
+        if (m_window) {
+            sv_log(QStringLiteral("[+0ms] visible=%1 geom=%2,%3 %4x%5")
+                   .arg(m_window->isVisible())
+                   .arg(m_window->x()).arg(m_window->y())
+                   .arg(m_window->width()).arg(m_window->height()));
+        }
+    });
+    for (int delay : {100, 500, 2000}) {
+        QTimer::singleShot(delay, this, [this, delay]() {
+            if (!m_window) return;
+            sv_log(QStringLiteral("[+%1ms] visible=%2 minimized=%3 geom=%4,%5 %6x%7")
+                   .arg(delay)
+                   .arg(m_window->isVisible())
+                   .arg(m_window->isMinimized())
+                   .arg(m_window->x()).arg(m_window->y())
+                   .arg(m_window->width()).arg(m_window->height()));
+        });
+    }
 }
 
 OverlayController::~OverlayController() {

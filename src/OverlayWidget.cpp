@@ -1,7 +1,12 @@
 #include "OverlayWidget.h"
 
+#include "Log.h"
+
+#include <QtGui/QHideEvent>
 #include <QtGui/QMoveEvent>
 #include <QtGui/QResizeEvent>
+#include <QtGui/QScreen>
+#include <QtGui/QShowEvent>
 
 #ifdef _WIN32
 #  define WIN32_LEAN_AND_MEAN
@@ -9,6 +14,7 @@
 #endif
 
 OverlayWidget::OverlayWidget(QWidget* parent) : QWidget(parent) {
+    sv_log("OverlayWidget ctor: enter");
     // IMPORTANT: keep the exact construction order from v0.2
     // (setWindowTitle + resize BEFORE applyWindowFlags). Reordering
     // these on Qt 5.15 leaves the window invisible.
@@ -16,6 +22,8 @@ OverlayWidget::OverlayWidget(QWidget* parent) : QWidget(parent) {
     setWindowTitle(QStringLiteral("Speaker View"));
     resize(260, 120);
     applyWindowFlags();
+    sv_log(QStringLiteral("OverlayWidget ctor: exit. flags=0x%1")
+           .arg(static_cast<quint32>(windowFlags()), 0, 16));
 }
 
 void OverlayWidget::setAlwaysOnTop(bool on) {
@@ -68,6 +76,20 @@ void OverlayWidget::applyClickThroughNative() {
     }
     ::SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex);
 #endif
+}
+
+void OverlayWidget::showEvent(QShowEvent* event) {
+    sv_log(QStringLiteral("OverlayWidget::showEvent. geom=%1,%2 %3x%4 screen=%5 winId=0x%6")
+           .arg(x()).arg(y()).arg(width()).arg(height())
+           .arg(screen() ? screen()->name() : QStringLiteral("none"))
+           .arg(reinterpret_cast<quintptr>(winId()), 0, 16));
+    QWidget::showEvent(event);
+}
+
+void OverlayWidget::hideEvent(QHideEvent* event) {
+    sv_log(QStringLiteral("OverlayWidget::hideEvent. geom=%1,%2 %3x%4")
+           .arg(x()).arg(y()).arg(width()).arg(height()));
+    QWidget::hideEvent(event);
 }
 
 void OverlayWidget::moveEvent(QMoveEvent* event) {
