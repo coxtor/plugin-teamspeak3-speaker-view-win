@@ -39,6 +39,20 @@ Runtime dependencies must go:
 - next to `ts3client_win64.exe` itself (only works if the user also has
   write access there, which they usually don't).
 
+## Two Qt-palette pitfalls when toggling display modes
+
+1. `QPalette()` (default-constructed) is not "reset to host" — it is an
+   all-black palette. Assigning it blacks out the widget. To revert to
+   the host-provided default, call `QApplication::palette()` and assign
+   that instead.
+
+2. `setAttribute(Qt::WA_TranslucentBackground, ...)` must be set
+   **before** `setWindowFlags(...)`. Changing window flags rebuilds the
+   native window; if the attribute isn't set at that point, Qt creates
+   the window without `WS_EX_LAYERED` on Windows and DWM will not
+   composite the alpha channel. Symptom: toggling into frameless/HUD
+   mode makes the window vanish entirely.
+
 ## WA_TranslucentBackground needs FramelessWindowHint on Windows
 
 Setting `Qt::WA_TranslucentBackground` unconditionally on a top-level

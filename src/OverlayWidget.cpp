@@ -3,6 +3,7 @@
 #include <QtGui/QMoveEvent>
 #include <QtGui/QPainter>
 #include <QtGui/QResizeEvent>
+#include <QtWidgets/QApplication>
 
 OverlayWidget::OverlayWidget(QWidget* parent) : QWidget(parent) {
     setAttribute(Qt::WA_ShowWithoutActivating, true);
@@ -34,19 +35,21 @@ void OverlayWidget::applyWindowFlags() {
     const bool visible = isVisible();
     const QRect geo = geometry();
 
+    // WA_TranslucentBackground must be set BEFORE setWindowFlags, otherwise
+    // Qt re-creates the native window without WS_EX_LAYERED and DWM won't
+    // composite the alpha channel — on Windows this manifests as the
+    // window disappearing entirely when toggling into frameless mode.
+    setAttribute(Qt::WA_TranslucentBackground, m_borderless);
+    setAutoFillBackground(!m_borderless);
+
     Qt::WindowFlags f = Qt::Tool | Qt::WindowDoesNotAcceptFocus;
     if (m_alwaysOnTop) f |= Qt::WindowStaysOnTopHint;
     if (m_borderless) f |= Qt::FramelessWindowHint;
     setWindowFlags(f);
 
-    // Translucent background is only composited by DWM for frameless windows.
-    // If we set WA_TranslucentBackground on a normal tool window, Windows
-    // renders the client area as opaque black — and our paintEvent's
-    // semi-transparent overlay on top of that gives a solid black box.
-    setAttribute(Qt::WA_TranslucentBackground, m_borderless);
-    setAutoFillBackground(!m_borderless);
-
     // Palette: dark HUD uses light text, normal tool window inherits host.
+    // A default-constructed QPalette is all-black — not "reset to host".
+    // Use the application palette explicitly for the non-HUD case.
     if (m_borderless) {
         QPalette pal;
         pal.setColor(QPalette::WindowText, QColor(240, 240, 240));
@@ -55,7 +58,7 @@ void OverlayWidget::applyWindowFlags() {
         pal.setColor(QPalette::Disabled, QPalette::Text,       QColor(160, 160, 160));
         setPalette(pal);
     } else {
-        setPalette(QPalette());  // reset to host default
+        setPalette(QApplication::palette());
     }
 
     if (geo.isValid()) setGeometry(geo);
