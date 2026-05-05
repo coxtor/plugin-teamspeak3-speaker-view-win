@@ -1,99 +1,158 @@
-# plugin-teamspeak3-speaker-view-win
+# Speaker View for TeamSpeak 3
 
-Windows port of [plugin-teamspeak3-speaker-view](../plugin-teamspeak3-speaker-view)
-— a TeamSpeak 3 client plugin showing a separate overlay window with the
-members of the current channel who are currently speaking, similar to
-Mumble's overlay. Each entry fades out after a configurable delay.
+A small overlay window that shows who in your channel is currently
+speaking — think Mumble's floating speaker list, but for TS3.
 
-## Stack (locked)
+- Live list of speakers in your channel, sorted by activity.
+- Per-speaker fade-out after a configurable delay, so rapid talkers
+  don't make the list flicker.
+- Frameless window with a custom title bar, native Windows drop shadow,
+  and Windows 11 rounded corners.
+- Follows the OS light / dark theme.
+- Menu entry **Tools → Plugins → Speaker View → Toggle Speaker View**
+  to show or hide the overlay at any time.
 
-- **UI**: Qt 5.15 (WidgetKit). TS3 itself embeds Qt 5.15, so end users
-  install nothing extra — the plugin attaches to TS3's own Qt.
-- **Compiler**: MSVC (x64). TS3 is MSVC-built; matching the toolchain
-  avoids ABI friction.
-- **Build**: CMake.
-- **CI**: GitHub Actions on `windows-latest`. The CI runner is the only
-  build machine — neither developer has a local Windows environment.
-- **Plugin API**: 26 (TS3 Client 3.6.x).
-- **Config dialog mode**: `PLUGIN_OFFERS_CONFIGURE_QT_THREAD` (works
-  because we share Qt with the host).
+This is the **Windows port** of the original macOS plugin
+([plugin-teamspeak3-speaker-view](../plugin-teamspeak3-speaker-view));
+feature parity with the Mac version is preserved.
 
-## Prerequisites
+## Install
 
-- **TeamSpeak 3 Client 3.6.x**, 64-bit (Plugin API version 26).
-- **Microsoft Visual C++ 2015–2022 Redistributable (x64)** — required
-  because the plugin is MSVC-built. Without it, the DLL fails to load
-  with `STATUS_INVALID_IMAGE_FORMAT` (`0xc0000020`). Download:
-  <https://aka.ms/vs/17/release/vc_redist.x64.exe>.
+1. Install the **Microsoft Visual C++ 2015–2022 Redistributable (x64)**:
+   <https://aka.ms/vs/17/release/vc_redist.x64.exe>. Without it the DLL
+   fails to load with `STATUS_INVALID_IMAGE_FORMAT` (`0xc0000020`).
+2. Grab the latest `speakerview-<version>.ts3_plugin` from the
+   [Actions artifacts](../../actions) (open the most recent green
+   `build` run, download the `speakerview-windows-x64` artifact, unzip).
+3. Double-click the `.ts3_plugin` file. TS3's built-in addon installer
+   takes it from there.
+4. In TeamSpeak: **Tools → Options → Addons → Plugins** → enable
+   *Speaker View*.
 
-## How to get a binary
+Requires **TeamSpeak 3 Client 3.6.x, 64-bit** (Plugin API version 26).
 
-Push to `main` (or open a PR). GitHub Actions builds a
-`speakerview-<version>.ts3_plugin` file and attaches it as a workflow
-artifact. Download the artifact ZIP, unzip, and double-click the
-`.ts3_plugin` — TS3's built-in addon installer takes it from there.
+### Manual install (no installer dialog)
 
-For a manual install instead (no installer dialog), drop both
-`speakerview.dll` and `speakerview.ini` from the artifact into:
+The artifact ZIP also contains raw `speakerview.dll` + `speakerview.ini`.
+Drop both into
 
 ```
 %APPDATA%\TS3Client\plugins\
 ```
 
-In TS3: **Tools → Options → Addons → Plugins → Reload All → enable
-"Speaker View"**.
+then in TS3: **Tools → Options → Addons → Plugins → Reload All** →
+enable *Speaker View*.
 
-### If the CI SDK download fails
+## Usage
 
-The CI tries to fetch the TS3 Plugin SDK headers from TeamSpeak's CDN
-(exact URL may rot over time). If that step fails:
+The overlay appears as soon as the plugin is enabled. Drag its title
+bar to move it; close it with the `×` in the title bar. Bring it back
+via **Tools → Plugins → Speaker View → Toggle Speaker View**.
 
-1. Download the SDK manually from <https://teamspeak.com/en/downloads/>.
-2. Drop the four required headers into `sdk/` of the repo (see
-   [sdk/README.md](sdk/README.md) for the exact layout).
-3. Comment out the "Download TS3 Plugin SDK" step and remove the
-   `-DTS3_SDK_DIR=...` flag from the Configure step.
-4. Note: the SDK license typically restricts redistribution, so do not
-   commit those headers to a public repo.
+Settings dialog: **Tools → Options → Addons → Plugins → Speaker View →
+Settings** (the gear icon in TS3's plugin list).
 
-## Feature parity with macOS
+Available settings:
 
-All features are ported from the Mac implementation. Behavioural
-invariants established on Mac must be preserved:
+| Setting | Effect |
+| --- | --- |
+| Fade-out after talking | How long a speaker stays on screen after they stop (0–10 s). |
+| Display mode | *All speakers in my channel* / *Only the latest speaker*. |
+| Always on top | Keeps the overlay above other windows (default: on). |
+| Remember position | Restores window position + width across sessions (default: on). |
+| Click-through | Mouse events pass through the overlay to the window below. |
+| Show channel name | Adds a second line per speaker with the channel name. |
+| Also show my own voice | Includes you in the list when you talk. |
 
-- **2 s VAD grace period** before fade-out begins (prevents flicker in
-  natural speech pauses).
-- **Phantom-entry guard**: `NOT_TALKING` for an already-removed client
-  is a no-op.
-- **Fade-clock integrity**: only the first `talking → not-talking`
-  transition stamps the stop time.
-- **Auto-fit height suppressed when `rememberFrame` is on** — the user's
-  manual sizing is not overwritten on every snapshot.
-- **Own-channel filter**: only speakers in the local user's channel.
-- **Settings owned by the plugin**, not by TS3. Stored at
-  `%APPDATA%\TS3Client\plugins\speaker-view\settings.ini`.
+Settings are stored per user at
+`%APPDATA%\TS3Client\plugins\speaker-view\settings.ini`, separate from
+TS3's own config.
 
-## Local build (optional, if you eventually get a Windows machine)
+## Behaviour that was deliberately designed
 
-Prerequisites: Visual Studio 2022 (MSVC x64), CMake 3.21+, Qt 5.15.x
-(official installer or `aqtinstall`), the TS3 Client Plugin SDK
-(headers only).
+- **2 s grace period** before fade-out starts — prevents flicker during
+  normal speech pauses and breaths.
+- **Own-channel filter** — you only see speakers in the same channel as
+  you; nobody from elsewhere pops up.
+- **Dynamic height** — the window grows when more people talk and
+  shrinks back when they stop, while your manually chosen position and
+  width stay put.
+- **Off-screen frame discard** — if your saved position points at a
+  monitor that is no longer attached, the plugin falls back to a safe
+  default instead of hiding the window on a disconnected display.
+
+## Build from source
+
+There is no developer Windows machine. **CI is the build machine.** Push
+to `main` or open a PR; GitHub Actions builds `speakerview.dll`,
+packages it as `.ts3_plugin`, and uploads the artifact.
+
+Toolchain used by CI (defined in `.github/workflows/build.yml`):
+
+- GitHub Actions `windows-latest` runner
+- MSVC x64 via `ilammy/msvc-dev-cmd`
+- Qt 5.15.2 via `jurplel/install-qt-action`
+- Ninja generator
+- TS3 Plugin SDK headers fetched from
+  [github.com/teamspeak/ts3client-pluginsdk](https://github.com/teamspeak/ts3client-pluginsdk)
+  at a pinned commit (API version 26)
+
+### Local build (if you do have Windows)
+
+Prerequisites: Visual Studio 2022 Build Tools (MSVC x64), CMake 3.21+,
+Qt 5.15.x, and the TS3 Client Plugin SDK (headers only).
 
 ```powershell
 cmake -S . -B build `
-      -G "Visual Studio 17 2022" -A x64 `
-      -DTS3_SDK_DIR="C:\path\to\ts3client-pluginsdk-26" `
+      -G Ninja `
+      -DCMAKE_BUILD_TYPE=Release `
+      -DTS3_SDK_DIR="C:\path\to\ts3client-pluginsdk" `
       -DCMAKE_PREFIX_PATH="C:\Qt\5.15.2\msvc2019_64"
-cmake --build build --config Release
+cmake --build build --parallel
 ```
 
-Output: `build\Release\speakerview.dll`. Copy it + `resources\speakerview.ini`
-to the TS3 plugin directory above.
+Output: `build\speakerview.dll`. Copy it + `resources\speakerview.ini`
+to `%APPDATA%\TS3Client\plugins\`, or drop the four TS3 SDK headers
+into `sdk/` in the repo (see [sdk/README.md](sdk/README.md)) and omit
+the `-DTS3_SDK_DIR` flag.
 
-Alternatively, drop the four TS3 SDK headers into `sdk/` (see
-[sdk/README.md](sdk/README.md)) and omit `-DTS3_SDK_DIR`.
+### If the CI SDK download fails
+
+TeamSpeak has rotated SDK URLs before (the old
+`files.teamspeak-services.com` CDN is dead). If the *Download TS3
+Plugin SDK* step fails:
+
+1. Download the SDK manually from <https://teamspeak.com/en/downloads/>
+   or <https://github.com/teamspeak/ts3client-pluginsdk>.
+2. Drop the four required headers into `sdk/` (see
+   [sdk/README.md](sdk/README.md)).
+3. Comment out the *Download TS3 Plugin SDK* step in the workflow and
+   remove `-DTS3_SDK_DIR=...` from the Configure step.
+4. Do not commit the headers to a public repo — the SDK license
+   typically restricts redistribution.
+
+## Project layout
+
+```
+.github/workflows/build.yml   CI: builds the .ts3_plugin artifact
+CMakeLists.txt                build definition (MSVC + Qt 5.15)
+resources/speakerview.ini     plugin metadata TS3 reads on load
+sdk/                          (optional) TS3 SDK headers; empty in repo
+src/plugin.cpp                TS3 C-ABI entry points
+src/PluginContext.{h,cpp}     singleton wiring: config/tracker/overlay
+src/TS3Bridge.{h,cpp}         ts3_functions wrappers with QString/RAII
+src/SpeakerTracker.{h,cpp}    talk-status state, VAD grace, fade clock
+src/OverlayController.{h,cpp} snapshot → rows, geometry persistence
+src/OverlayWidget.{h,cpp}     frameless top-level window + DWM effects
+src/SpeakerRowWidget.{h,cpp}  one row: dot + nick + optional channel
+src/ConfigModel.{h,cpp}       QSettings-backed settings
+src/ConfigDialog.{h,cpp}      PLUGIN_OFFERS_CONFIGURE_QT_THREAD dialog
+src/Log.{h,cpp}               forwards to TS3's logMessage
+tasks/lessons.md              pitfalls hit during the port
+tasks/todo.md                 checklist
+```
 
 ## License
 
-MIT — see [LICENSE](LICENSE). TS3 SDK headers belong to TeamSpeak Systems
-GmbH and are not redistributed here.
+MIT — see [LICENSE](LICENSE). TS3 SDK headers remain the property of
+TeamSpeak Systems GmbH and are not redistributed in this repo.
