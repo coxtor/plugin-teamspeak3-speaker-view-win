@@ -31,20 +31,17 @@ jobs:
 
       - name: Download TS3 Plugin SDK
         shell: pwsh
+        # TeamSpeak retired the files.teamspeak-services.com SDK CDN in 2026.
+        # The official source is now github.com/teamspeak/ts3client-pluginsdk
+        # (PLUGIN_API_VERSION 26). Pinned to a commit SHA for reproducibility.
         run: |
           $ErrorActionPreference = 'Stop'
-          $url = 'https://files.teamspeak-services.com/releases/sdk/3.6.0/ts3client-pluginsdk-26.zip'
+          $sha = '4aa90a53aa150cbf81e13bc97e68c0431b26499f'
+          $url = "https://github.com/teamspeak/ts3client-pluginsdk/archive/$sha.zip"
           $zip = Join-Path $env:RUNNER_TEMP 'ts3sdk.zip'
-          try {
-              Invoke-WebRequest -Uri $url -OutFile $zip
-          } catch {
-              Write-Host "Primary SDK URL failed; user must supply sdk/ headers in the repo."
-              exit 1
-          }
+          Invoke-WebRequest -Uri $url -OutFile $zip
           Expand-Archive -Path $zip -DestinationPath "$env:RUNNER_TEMP\ts3sdk" -Force
-          # Flatten: the archive root usually contains the include/ dir directly.
           $sdkRoot = Get-ChildItem "$env:RUNNER_TEMP\ts3sdk" -Directory | Select-Object -First 1
-          if (-not $sdkRoot) { $sdkRoot = Get-Item "$env:RUNNER_TEMP\ts3sdk" }
           echo "TS3_SDK_DIR=$($sdkRoot.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "TS3 SDK at: $($sdkRoot.FullName)"
           Get-ChildItem -Recurse "$($sdkRoot.FullName)\include" | Select-Object FullName
