@@ -44,7 +44,7 @@ OverlayController::OverlayController(QObject* parent) : QObject(parent) {
            .arg(m_window->isVisible())
            .arg(m_window->x()).arg(m_window->y())
            .arg(m_window->width()).arg(m_window->height())
-           .arg(reinterpret_cast<quintptr>(m_window->winId()), 0, 16));
+           .arg(static_cast<quintptr>(m_window->winId()), 0, 16));
 
     connect(m_window, &OverlayWidget::frameChanged,
             this, &OverlayController::onWindowFrameChanged);

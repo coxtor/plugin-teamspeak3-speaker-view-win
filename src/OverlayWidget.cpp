@@ -9,7 +9,7 @@
 #include <QtGui/QShowEvent>
 
 #ifdef _WIN32
-#  define WIN32_LEAN_AND_MEAN
+// WIN32_LEAN_AND_MEAN is already defined as a compile definition in CMake.
 #  include <windows.h>
 #endif
 
@@ -82,7 +82,7 @@ void OverlayWidget::showEvent(QShowEvent* event) {
     sv_log(QStringLiteral("OverlayWidget::showEvent. geom=%1,%2 %3x%4 screen=%5 winId=0x%6")
            .arg(x()).arg(y()).arg(width()).arg(height())
            .arg(screen() ? screen()->name() : QStringLiteral("none"))
-           .arg(reinterpret_cast<quintptr>(winId()), 0, 16));
+           .arg(static_cast<quintptr>(winId()), 0, 16));
     QWidget::showEvent(event);
 }
 
