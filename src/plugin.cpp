@@ -31,7 +31,7 @@ enum : int {
 
 #define PLUGIN_API_VERSION 26
 #define PLUGIN_NAME        "Speaker View"
-#define PLUGIN_VERSION     "0.4.2"
+#define PLUGIN_VERSION     "0.4.3"
 #define PLUGIN_AUTHOR      "plugin-teamspeak3-speaker-view-win contributors"
 #define PLUGIN_DESCRIPTION "Separate overlay window listing currently speaking members of your channel, with a configurable fade-out delay."
 

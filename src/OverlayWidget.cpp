@@ -18,10 +18,49 @@
 #ifdef _WIN32
 // WIN32_LEAN_AND_MEAN is already defined as a compile definition in CMake.
 #  include <windows.h>
+#  include <dwmapi.h>
+
+// Windows 11 rounded-corner API. Fall back to numeric constants when
+// compiling against an older SDK that doesn't define these yet — DWM
+// will ignore unknown attribute IDs at runtime.
+#  ifndef DWMWA_WINDOW_CORNER_PREFERENCE
+#    define DWMWA_WINDOW_CORNER_PREFERENCE 33
+#  endif
+#  ifndef DWMWCP_ROUND
+#    define DWMWCP_ROUND 2
+#  endif
 #endif
 
 namespace {
 constexpr int kTitleBarHeight = 24;
+
+// Ask DWM to draw the usual Windows drop-shadow around our frameless
+// window, and (on Windows 11) to round the outer corners. DWM only
+// draws the shadow for layered/frameless windows that claim a non-
+// client area — the classic trick is to extend the frame by one pixel
+// into the client area with DwmExtendFrameIntoClientArea, then tell
+// DWM via CSD that the window has a one-pixel "caption" region. No
+// visual change to the client — DWM paints only the shadow.
+void applyNativeWindowEffects(HWND hwnd) {
+#ifdef _WIN32
+    if (!hwnd) return;
+    const MARGINS m{ 1, 1, 1, 1 };
+    ::DwmExtendFrameIntoClientArea(hwnd, &m);
+
+    const DWORD policy = 2;  // DWMNCRP_ENABLED — force shadow on
+    ::DwmSetWindowAttribute(hwnd, DWMWA_NCRENDERING_POLICY,
+                            &policy, sizeof(policy));
+
+    // Rounded corners: DWM 10.0.22000+ silently accepts the attribute,
+    // older Windows returns an error we don't care about.
+    const int corner = DWMWCP_ROUND;
+    ::DwmSetWindowAttribute(hwnd,
+                            static_cast<DWORD>(DWMWA_WINDOW_CORNER_PREFERENCE),
+                            &corner, sizeof(corner));
+#else
+    (void)hwnd;
+#endif
+}
 
 // Follow the Windows 10/11 "Apps use light/dark theme" setting. Read
 // straight from the registry — Qt 5.15 has no portable dark-mode API,
@@ -233,14 +272,19 @@ void OverlayWidget::applyClickThroughNative() {
 
 void OverlayWidget::paintEvent(QPaintEvent* /*event*/) {
     // Title bar and content pane paint themselves via autoFillBackground.
-    // We only draw a 1px outline around the whole window so its edges are
-    // clearly visible on both light and dark desktops.
+    // On Windows, DWM paints the native drop-shadow + Win11 rounded
+    // corners outside our client area (set up in showEvent), so we do
+    // NOT draw any border here — it would otherwise fight the DWM rounding.
+#ifndef _WIN32
+    // Non-Windows fallback: keep a 1px outline so the frameless window
+    // still has a visible edge.
     QPainter p(this);
     QPen border(m_border);
     border.setWidth(1);
     p.setPen(border);
     p.setBrush(Qt::NoBrush);
     p.drawRect(rect().adjusted(0, 0, -1, -1));
+#endif
 }
 
 void OverlayWidget::mousePressEvent(QMouseEvent* event) {
@@ -295,6 +339,9 @@ void OverlayWidget::showEvent(QShowEvent* event) {
            .arg(screen() ? screen()->name() : QStringLiteral("none"))
            .arg(static_cast<quintptr>(winId()), 0, 16));
     QWidget::showEvent(event);
+#ifdef _WIN32
+    applyNativeWindowEffects(reinterpret_cast<HWND>(winId()));
+#endif
 }
 
 void OverlayWidget::hideEvent(QHideEvent* event) {

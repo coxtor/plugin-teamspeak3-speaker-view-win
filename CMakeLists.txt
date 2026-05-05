@@ -60,9 +60,11 @@ target_link_libraries(speakerview PRIVATE
 )
 
 if(WIN32)
-    # SetWindowPos / SetWindowLongPtrW for runtime always-on-top +
-    # click-through without HWND recreation.
-    target_link_libraries(speakerview PRIVATE user32)
+    # user32: SetWindowPos / SetWindowLongPtrW for runtime always-on-top +
+    #         click-through without HWND recreation.
+    # dwmapi: DwmExtendFrameIntoClientArea + DwmSetWindowAttribute for
+    #         the native drop-shadow and Windows 11 rounded corners.
+    target_link_libraries(speakerview PRIVATE user32 dwmapi)
 endif()
 
 if(MSVC)
