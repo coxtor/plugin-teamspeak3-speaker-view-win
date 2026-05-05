@@ -27,7 +27,6 @@ set(SRC
     src/TS3Bridge.cpp
     src/SpeakerTracker.cpp
     src/ConfigModel.cpp
-    src/NativeStyle.cpp
     src/OverlayWidget.cpp
     src/SpeakerRowWidget.cpp
     src/OverlayController.cpp
@@ -39,7 +38,6 @@ set(HDR
     src/TS3Bridge.h
     src/SpeakerTracker.h
     src/ConfigModel.h
-    src/NativeStyle.h
     src/OverlayWidget.h
     src/SpeakerRowWidget.h
     src/OverlayController.h
@@ -58,6 +56,12 @@ target_link_libraries(speakerview PRIVATE
     Qt5::Gui
     Qt5::Widgets
 )
+
+if(WIN32)
+    # SetWindowPos / SetWindowLongPtrW for runtime always-on-top +
+    # click-through without HWND recreation.
+    target_link_libraries(speakerview PRIVATE user32)
+endif()
 
 if(MSVC)
     # /utf-8 treats source files as UTF-8 and emits UTF-8 string literals.

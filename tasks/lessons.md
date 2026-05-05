@@ -50,18 +50,46 @@ Fix globally in `CMakeLists.txt`: `target_compile_options(... /utf-8)`.
 This flag both reads source as UTF-8 and emits UTF-8 string literals,
 which matches what Qt expects from `QStringLiteral()`.
 
-## Don't call QWidget::setStyle() from a plugin on Qt 5.15
+## Do not touch the Qt style/palette from inside a plugin
 
-Per-widget `setStyle()` during widget construction, while the host
-application (TS3) has a different global style already installed, is
-unreliable on Qt 5.15 — the top-level window failed to appear at all,
-even with a valid QStyle pointer. Changing only the QPalette is safe
-and gets us ~95% of the "native look" anyway. Keep the host's QStyle.
+We sit inside TS3's QApplication. Any attempt to override its QStyle,
+QPalette, or font — even per-widget at construction time — was
+unreliable on Qt 5.15 and repeatedly caused the top-level window to
+not appear at all. Symptoms ranged from "widget is 0×0 and invisible"
+to "entire window client area renders black" depending on which knob
+we touched. The only safe strategy is: do nothing. Accept that our
+UI inherits the host's theme. The plugin is a guest in TS3's process,
+not a standalone app.
 
-If a full native look is ever needed, a safer path would be to subclass
-the style via `QProxyStyle` and apply that at the QApplication level —
-but we don't control the QApplication here (TS3 does), so a hand-rolled
-light palette is the pragmatic fix.
+## setWindowFlags() recreates the native HWND — avoid runtime changes
+
+On Windows, `QWidget::setWindowFlags()` on an already-realized window
+destroys and re-creates the native HWND. That interacts badly with
+child widgets carrying `QGraphicsOpacityEffect`s and running
+`QPropertyAnimation`s — causing TS3 to crash when the user toggles
+always-on-top at runtime.
+
+Set the Qt window flags once, in the constructor, and never call
+`setWindowFlags` again. For runtime window-behavior toggles use the
+native Win32 APIs directly on the HWND obtained from `winId()`:
+- `SetWindowPos(hwnd, HWND_TOPMOST|HWND_NOTOPMOST, ...)` for always-on-top
+- `SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex | WS_EX_TRANSPARENT)` for
+  click-through
+Neither recreates the HWND, so Qt state (children, effects,
+animations) stays intact.
+
+## Stop flicking: re-plan instead of patching the same area
+
+When a single area produces multiple regressions in a row (here: first
+the window disappeared when toggling borderless, then the same symptom
+returned after native-look changes, then the always-on-top toggle
+crashed TS3), that is a signal to step back and reconsider the whole
+approach rather than adding another guarded condition on top of the
+previous fix. Each flick here added a comment about "this one weird
+Qt pitfall" while leaving the underlying strategy (mutating window
+flags / palette / style at runtime) intact. The fix was structural:
+freeze window flags after construction and route runtime changes
+through Win32. Compounding flicks hides the root cause.
 
 ## Two Qt-palette pitfalls when toggling display modes
 

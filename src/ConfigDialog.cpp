@@ -1,7 +1,6 @@
 #include "ConfigDialog.h"
 
 #include "ConfigModel.h"
-#include "NativeStyle.h"
 #include "PluginContext.h"
 
 #include <QtCore/QTimer>
@@ -31,9 +30,6 @@ void ConfigDialog::presentModal(QWidget* parent) {
 }
 
 ConfigDialog::ConfigDialog(QWidget* parent) : QDialog(parent) {
-    // See comment in OverlayWidget — override TS3's dark-Fusion defaults.
-    applyNativeWindowsLook(this);
-
     setWindowTitle(QStringLiteral("Speaker View — Settings"));
     setMinimumWidth(380);
 
@@ -73,18 +69,6 @@ ConfigDialog::ConfigDialog(QWidget* parent) : QDialog(parent) {
     root->addWidget(m_chkShowSelf);
 
     root->addStretch();
-
-    auto* redistHint = new QLabel(
-        QStringLiteral(
-            "<span style='color:palette(mid);'>Requires the Microsoft Visual C++ "
-            "2015–2022 Redistributable (x64) — "
-            "<a href='https://aka.ms/vs/17/release/vc_redist.x64.exe'>download</a>."
-            "</span>"),
-        this);
-    redistHint->setTextFormat(Qt::RichText);
-    redistHint->setOpenExternalLinks(true);
-    redistHint->setWordWrap(true);
-    root->addWidget(redistHint);
 
     connect(m_fade, &QSlider::valueChanged, this, &ConfigDialog::onFadeSliderChanged);
     connect(m_radioAll,    &QRadioButton::toggled, this, &ConfigDialog::onModeAllToggled);

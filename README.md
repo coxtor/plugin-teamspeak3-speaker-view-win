@@ -18,11 +18,23 @@ Mumble's overlay. Each entry fades out after a configurable delay.
 - **Config dialog mode**: `PLUGIN_OFFERS_CONFIGURE_QT_THREAD` (works
   because we share Qt with the host).
 
+## Prerequisites
+
+- **TeamSpeak 3 Client 3.6.x**, 64-bit (Plugin API version 26).
+- **Microsoft Visual C++ 2015–2022 Redistributable (x64)** — required
+  because the plugin is MSVC-built. Without it, the DLL fails to load
+  with `STATUS_INVALID_IMAGE_FORMAT` (`0xc0000020`). Download:
+  <https://aka.ms/vs/17/release/vc_redist.x64.exe>.
+
 ## How to get a binary
 
-Push to `main` (or open a PR). GitHub Actions builds `speakerview.dll`
-and attaches it as a workflow artifact. Download the artifact ZIP, unzip,
-drop both `speakerview.dll` and `speakerview.ini` into:
+Push to `main` (or open a PR). GitHub Actions builds a
+`speakerview-<version>.ts3_plugin` file and attaches it as a workflow
+artifact. Download the artifact ZIP, unzip, and double-click the
+`.ts3_plugin` — TS3's built-in addon installer takes it from there.
+
+For a manual install instead (no installer dialog), drop both
+`speakerview.dll` and `speakerview.ini` from the artifact into:
 
 ```
 %APPDATA%\TS3Client\plugins\
