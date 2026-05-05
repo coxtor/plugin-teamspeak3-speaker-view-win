@@ -65,6 +65,25 @@ jobs:
           Copy-Item resources\speakerview.ini     artifact\
           Get-ChildItem artifact
 
+      - name: Build .ts3_plugin installer package
+        shell: pwsh
+        # A .ts3_plugin is just a ZIP with:
+        #   /package.ini          — plugin metadata at root
+        #   /plugins/*.dll        — the plugin binary (x64)
+        # Renaming the ZIP to .ts3_plugin lets Windows users double-click
+        # to invoke the TS3 Addon Installer instead of copying files by hand.
+        run: |
+          $stage = 'ts3_plugin_stage'
+          New-Item -ItemType Directory -Force -Path "$stage\plugins" | Out-Null
+          Copy-Item resources\speakerview.ini    "$stage\package.ini"
+          Copy-Item build\Release\speakerview.dll "$stage\plugins\"
+          $version = (Select-String -Path resources\speakerview.ini -Pattern '^\s*Version\s*=\s*(.+)$').Matches.Groups[1].Value.Trim()
+          $outName = "speakerview-$version.ts3_plugin"
+          # .ts3_plugin is a plain ZIP; Compress-Archive needs .zip extension, rename after.
+          Compress-Archive -Path "$stage\*" -DestinationPath "artifact\speakerview.zip" -Force
+          Move-Item "artifact\speakerview.zip" "artifact\$outName" -Force
+          Get-ChildItem artifact
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
