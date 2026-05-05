@@ -50,6 +50,33 @@ Fix globally in `CMakeLists.txt`: `target_compile_options(... /utf-8)`.
 This flag both reads source as UTF-8 and emits UTF-8 string literals,
 which matches what Qt expects from `QStringLiteral()`.
 
+## Don't start a QGraphicsEffect animation before first paint
+
+Creating a `QGraphicsOpacityEffect` on a widget and immediately starting
+a `QPropertyAnimation` on it **before the widget has ever been painted**
+crashes on Qt 5.15 / Windows inside `QGraphicsEffectSource::draw` on
+the first paint event. Repro: a row widget constructed as child of a
+`Qt::Tool` parent, effect installed in ctor, animation started in the
+same ctor. Crash fires later, on the first voice event that makes the
+row visible.
+
+Initialise effect state (opacity, labels, flags) synchronously in the
+ctor. Start animations only from subsequent update calls driven by the
+event loop, not inside the ctor.
+
+## Qt::WindowDoesNotAcceptFocus + SetWindowPos(SWP_NOACTIVATE) on show
+
+`Qt::WindowDoesNotAcceptFocus` combined with `WA_ShowWithoutActivating`
+on a `Qt::Tool` window, plus a synchronous Win32 `SetWindowPos`
+(HWND_TOPMOST, SWP_NOACTIVATE) during the widget's first `showEvent`,
+prevents Qt's own `ShowWindow(SW_SHOW)` from ever running — the HWND is
+created but the user never sees the window.
+
+- Drop `Qt::WindowDoesNotAcceptFocus` (Qt::Tool alone is enough to stop
+  focus-stealing).
+- Defer native Win32 tweaks via `QTimer::singleShot(0, ...)` from inside
+  `showEvent` so they run after Qt's show sequence has completed.
+
 ## Do not touch the Qt style/palette from inside a plugin
 
 We sit inside TS3's QApplication. Any attempt to override its QStyle,

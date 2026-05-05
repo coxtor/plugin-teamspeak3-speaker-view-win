@@ -52,7 +52,18 @@ SpeakerRowWidget::SpeakerRowWidget(const SpeakerSnapshot& snapshot,
     m_opacity->setOpacity(1.0);
     setGraphicsEffect(m_opacity);
 
-    updateSnapshot(snapshot, showChannel, 0.0);
+    // Initialise label text directly — do NOT call updateSnapshot() here.
+    // updateSnapshot() starts a QPropertyAnimation on the opacity effect,
+    // and on Qt 5.15 / Windows starting an effect animation before the
+    // widget has ever been painted crashes inside QGraphicsEffectSource
+    // on the first paint event (reproducible: crash as soon as the first
+    // speaker event fires). Set opacity fully on here; the next
+    // updateSnapshot triggered by a snapshot tick will animate normally.
+    m_clientID = snapshot.clientID;
+    m_talking = snapshot.talking;
+    m_nickLabel->setText(snapshot.nickname);
+    m_channelLabel->setVisible(showChannel && !snapshot.channelName.isEmpty());
+    m_channelLabel->setText(snapshot.channelName);
 }
 
 void SpeakerRowWidget::updateSnapshot(const SpeakerSnapshot& s,

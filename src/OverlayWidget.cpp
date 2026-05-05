@@ -1,5 +1,6 @@
 #include "OverlayWidget.h"
 
+#include <QtCore/QTimer>
 #include <QtGui/QMoveEvent>
 #include <QtGui/QResizeEvent>
 #include <QtGui/QWindow>
@@ -10,19 +11,15 @@
 #endif
 
 OverlayWidget::OverlayWidget(QWidget* parent) : QWidget(parent) {
+    // Qt::Tool keeps the overlay out of the taskbar and stops it stealing
+    // focus on its own. We deliberately do NOT add Qt::WindowDoesNotAcceptFocus:
+    // on Qt 5.15 Windows, combined with WA_ShowWithoutActivating and a
+    // SetWindowPos(HWND_TOPMOST, SWP_NOACTIVATE) on show, it prevents Qt's
+    // own ShowWindow(SW_SHOW) from ever making the window visible.
+    setWindowFlags(Qt::Tool);
     setAttribute(Qt::WA_ShowWithoutActivating, true);
     setWindowTitle(QStringLiteral("Speaker View"));
     resize(260, 120);
-
-    // Window flags are set ONCE, in the constructor. Changing them later via
-    // setWindowFlags() destroys and recreates the native HWND — which is
-    // unreliable with children that own QGraphicsOpacityEffect and running
-    // QPropertyAnimation (symptom: TS3 crashes on toggling always-on-top).
-    // Runtime toggles (always-on-top, click-through) go through the Win32
-    // APIs below instead so the HWND stays alive.
-    setWindowFlags(Qt::Tool | Qt::WindowDoesNotAcceptFocus);
-    applyAlwaysOnTopNative();
-    applyClickThroughNative();
 }
 
 void OverlayWidget::setAlwaysOnTop(bool on) {
@@ -67,10 +64,15 @@ void OverlayWidget::applyClickThroughNative() {
 
 void OverlayWidget::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
-    // The native HWND only exists after the first show(); re-apply so our
-    // constructor-time intent is realised.
-    applyAlwaysOnTopNative();
-    applyClickThroughNative();
+    // Defer native Win32 tweaks until AFTER Qt has finished its own
+    // ShowWindow(SW_SHOW) sequence. Calling SetWindowPos(HWND_TOPMOST,
+    // SWP_NOACTIVATE) synchronously during the first showEvent races with
+    // Qt's internal show path on 5.15 Windows and the window ends up
+    // created but never actually shown to the user.
+    QTimer::singleShot(0, this, [this]() {
+        applyAlwaysOnTopNative();
+        applyClickThroughNative();
+    });
 }
 
 void OverlayWidget::moveEvent(QMoveEvent* event) {
