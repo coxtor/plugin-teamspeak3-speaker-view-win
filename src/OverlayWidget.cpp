@@ -46,6 +46,18 @@ void OverlayWidget::applyWindowFlags() {
     setAttribute(Qt::WA_TranslucentBackground, m_borderless);
     setAutoFillBackground(!m_borderless);
 
+    // Palette: dark HUD uses light text, normal tool window inherits host.
+    if (m_borderless) {
+        QPalette pal;
+        pal.setColor(QPalette::WindowText, QColor(240, 240, 240));
+        pal.setColor(QPalette::Text,       QColor(240, 240, 240));
+        pal.setColor(QPalette::Disabled, QPalette::WindowText, QColor(160, 160, 160));
+        pal.setColor(QPalette::Disabled, QPalette::Text,       QColor(160, 160, 160));
+        setPalette(pal);
+    } else {
+        setPalette(QPalette());  // reset to host default
+    }
+
     if (geo.isValid()) setGeometry(geo);
     if (visible) show();
     update();

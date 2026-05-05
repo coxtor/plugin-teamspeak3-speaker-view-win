@@ -23,19 +23,27 @@ SpeakerRowWidget::SpeakerRowWidget(const SpeakerSnapshot& snapshot,
     textColumn->setContentsMargins(0, 0, 0, 0);
     textColumn->setSpacing(0);
 
+    // No hardcoded text colors: fall back to the host's palette so the
+    // labels stay readable in both the normal tool-window (system
+    // background, often light) and the borderless HUD (dark translucent).
+    // The OverlayController applies a palette override per mode.
     m_nickLabel = new QLabel(this);
     QFont f = m_nickLabel->font();
     f.setPointSizeF(f.pointSizeF() + 1.0);
     f.setWeight(QFont::Medium);
     m_nickLabel->setFont(f);
-    m_nickLabel->setStyleSheet("color: #F0F0F0;");
     textColumn->addWidget(m_nickLabel);
 
     m_channelLabel = new QLabel(this);
     QFont sf = m_channelLabel->font();
     sf.setPointSizeF(std::max(7.0, sf.pointSizeF() - 2.0));
     m_channelLabel->setFont(sf);
-    m_channelLabel->setStyleSheet("color: #A0A0A0;");
+    // Channel label picks up the disabled-text / placeholder palette role
+    // so it visually subordinates to the nickname without hardcoding a hex.
+    QPalette sp = m_channelLabel->palette();
+    sp.setColor(QPalette::WindowText,
+                sp.color(QPalette::Disabled, QPalette::WindowText));
+    m_channelLabel->setPalette(sp);
     textColumn->addWidget(m_channelLabel);
 
     outer->addLayout(textColumn);
