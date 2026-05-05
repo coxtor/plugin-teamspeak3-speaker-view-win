@@ -10,7 +10,6 @@ constexpr const char* kKeyDisplayMode  = "displayMode";
 constexpr const char* kKeyAlwaysOnTop  = "alwaysOnTop";
 constexpr const char* kKeyRememberFrame= "rememberFrame";
 constexpr const char* kKeyClickThrough = "clickThrough";
-constexpr const char* kKeyBorderless   = "borderless";
 constexpr const char* kKeyShowAvatar   = "showAvatar";
 constexpr const char* kKeyShowChannel  = "showChannel";
 constexpr const char* kKeyShowSelf     = "showSelf";
@@ -45,7 +44,6 @@ void ConfigModel::load() {
     m_alwaysOnTop    = s.value(kKeyAlwaysOnTop,  m_alwaysOnTop).toBool();
     m_rememberFrame  = s.value(kKeyRememberFrame,m_rememberFrame).toBool();
     m_clickThrough   = s.value(kKeyClickThrough, m_clickThrough).toBool();
-    m_borderless     = s.value(kKeyBorderless,   m_borderless).toBool();
     m_showAvatar     = s.value(kKeyShowAvatar,   m_showAvatar).toBool();
     m_showChannel    = s.value(kKeyShowChannel,  m_showChannel).toBool();
     m_showSelf       = s.value(kKeyShowSelf,     m_showSelf).toBool();
@@ -68,7 +66,6 @@ void ConfigModel::save() {
     s.setValue(kKeyAlwaysOnTop,   m_alwaysOnTop);
     s.setValue(kKeyRememberFrame, m_rememberFrame);
     s.setValue(kKeyClickThrough,  m_clickThrough);
-    s.setValue(kKeyBorderless,    m_borderless);
     s.setValue(kKeyShowAvatar,    m_showAvatar);
     s.setValue(kKeyShowChannel,   m_showChannel);
     s.setValue(kKeyShowSelf,      m_showSelf);
@@ -99,7 +96,6 @@ SV_SET(DisplayMode,    m_displayMode,    DisplayMode)
 SV_SET(AlwaysOnTop,    m_alwaysOnTop,    bool)
 SV_SET(RememberFrame,  m_rememberFrame,  bool)
 SV_SET(ClickThrough,   m_clickThrough,   bool)
-SV_SET(Borderless,     m_borderless,     bool)
 SV_SET(ShowAvatar,     m_showAvatar,     bool)
 SV_SET(ShowChannel,    m_showChannel,    bool)
 SV_SET(ShowSelf,       m_showSelf,       bool)

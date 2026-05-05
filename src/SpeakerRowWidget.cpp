@@ -24,9 +24,8 @@ SpeakerRowWidget::SpeakerRowWidget(const SpeakerSnapshot& snapshot,
     textColumn->setSpacing(0);
 
     // No hardcoded text colors: fall back to the host's palette so the
-    // labels stay readable in both the normal tool-window (system
-    // background, often light) and the borderless HUD (dark translucent).
-    // The OverlayController applies a palette override per mode.
+    // labels stay readable against whatever background the host picks
+    // for the tool window.
     m_nickLabel = new QLabel(this);
     QFont f = m_nickLabel->font();
     f.setPointSizeF(f.pointSizeF() + 1.0);

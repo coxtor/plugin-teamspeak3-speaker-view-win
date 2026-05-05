@@ -60,14 +60,12 @@ ConfigDialog::ConfigDialog(QWidget* parent) : QDialog(parent) {
     m_chkAlwaysOnTop   = new QCheckBox(QStringLiteral("Always on top"), this);
     m_chkRememberFrame = new QCheckBox(QStringLiteral("Remember position and size between sessions"), this);
     m_chkClickThrough  = new QCheckBox(QStringLiteral("Click-through (mouse events pass through)"), this);
-    m_chkBorderless    = new QCheckBox(QStringLiteral("Borderless window (no title bar)"), this);
     m_chkShowAvatar    = new QCheckBox(QStringLiteral("Show avatar thumbnail"), this);
     m_chkShowChannel   = new QCheckBox(QStringLiteral("Show channel name per entry"), this);
     m_chkShowSelf      = new QCheckBox(QStringLiteral("Also show my own voice"), this);
     root->addWidget(m_chkAlwaysOnTop);
     root->addWidget(m_chkRememberFrame);
     root->addWidget(m_chkClickThrough);
-    root->addWidget(m_chkBorderless);
     root->addWidget(m_chkShowAvatar);
     root->addWidget(m_chkShowChannel);
     root->addWidget(m_chkShowSelf);
@@ -78,7 +76,7 @@ ConfigDialog::ConfigDialog(QWidget* parent) : QDialog(parent) {
     connect(m_radioAll,    &QRadioButton::toggled, this, &ConfigDialog::onModeAllToggled);
     connect(m_radioLatest, &QRadioButton::toggled, this, &ConfigDialog::onModeLatestToggled);
     for (QCheckBox* c : {m_chkAlwaysOnTop, m_chkRememberFrame, m_chkClickThrough,
-                         m_chkBorderless, m_chkShowAvatar, m_chkShowChannel,
+                         m_chkShowAvatar, m_chkShowChannel,
                          m_chkShowSelf}) {
         connect(c, &QCheckBox::toggled, this, &ConfigDialog::onToggleChanged);
     }
@@ -108,7 +106,6 @@ void ConfigDialog::loadFromModel() {
     set(m_chkAlwaysOnTop,   cfg->alwaysOnTop());
     set(m_chkRememberFrame, cfg->rememberFrame());
     set(m_chkClickThrough,  cfg->clickThrough());
-    set(m_chkBorderless,    cfg->borderless());
     set(m_chkShowAvatar,    cfg->showAvatar());
     set(m_chkShowChannel,   cfg->showChannel());
     set(m_chkShowSelf,      cfg->showSelf());
@@ -139,7 +136,6 @@ void ConfigDialog::onToggleChanged() {
     if      (s == m_chkAlwaysOnTop)   cfg->setAlwaysOnTop(on);
     else if (s == m_chkRememberFrame) cfg->setRememberFrame(on);
     else if (s == m_chkClickThrough)  cfg->setClickThrough(on);
-    else if (s == m_chkBorderless)    cfg->setBorderless(on);
     else if (s == m_chkShowAvatar)    cfg->setShowAvatar(on);
     else if (s == m_chkShowChannel)   cfg->setShowChannel(on);
     else if (s == m_chkShowSelf)      cfg->setShowSelf(on);

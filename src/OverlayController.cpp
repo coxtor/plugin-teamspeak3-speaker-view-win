@@ -61,7 +61,6 @@ void OverlayController::applyConfig(const ConfigModel& cfg) {
 
     if (!m_window) return;
     m_window->setAlwaysOnTop(cfg.alwaysOnTop());
-    m_window->setBorderless(cfg.borderless());
     m_window->setClickThrough(cfg.clickThrough());
 }
 

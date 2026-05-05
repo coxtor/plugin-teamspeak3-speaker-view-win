@@ -33,9 +33,9 @@
 
 ## UI (Qt)
 
-- [ ] `src/OverlayWidget.{h,cpp}` — top-level QWidget, FramelessWindowHint,
-      WA_TranslucentBackground, WindowStaysOnTopHint (configurable),
-      WindowTransparentForInput (click-through)
+- [ ] `src/OverlayWidget.{h,cpp}` — top-level Qt::Tool QWidget,
+      WindowStaysOnTopHint (configurable),
+      WA_TransparentForMouseEvents (click-through)
 - [ ] `src/SpeakerRowWidget.{h,cpp}` — dot + nick (+ channel)
 - [ ] `src/OverlayController.{h,cpp}` — snapshot consumer, animates
       opacity with QPropertyAnimation
@@ -48,7 +48,7 @@
 - [ ] Plugin appears, config dialog opens
 - [ ] Sprecher-Flow: other user speaks → name appears → fades
 - [ ] Display-mode switch, channel switch, always-on-top,
-      click-through, borderless, remember-frame toggles observable
+      click-through, remember-frame toggles observable
 
 ## Review
 
