@@ -11,12 +11,12 @@ class SpeakerRowWidget : public QWidget {
     Q_OBJECT
 public:
     explicit SpeakerRowWidget(const SpeakerSnapshot& snapshot,
-                              bool showAvatar, bool showChannel,
+                              bool showChannel,
                               QWidget* parent = nullptr);
 
     uint16_t clientID() const { return m_clientID; }
 
-    void updateSnapshot(const SpeakerSnapshot& s, bool showAvatar,
+    void updateSnapshot(const SpeakerSnapshot& s,
                         bool showChannel, double fadeDuration);
 
     void animateRemoval(int durationMs, std::function<void()> completion);

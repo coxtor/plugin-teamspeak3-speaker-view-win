@@ -33,7 +33,6 @@ private:
     QCheckBox*    m_chkAlwaysOnTop = nullptr;
     QCheckBox*    m_chkRememberFrame = nullptr;
     QCheckBox*    m_chkClickThrough = nullptr;
-    QCheckBox*    m_chkShowAvatar = nullptr;
     QCheckBox*    m_chkShowChannel = nullptr;
     QCheckBox*    m_chkShowSelf = nullptr;
 };

@@ -54,7 +54,6 @@ void OverlayController::teardown() {
 }
 
 void OverlayController::applyConfig(const ConfigModel& cfg) {
-    m_showAvatar = cfg.showAvatar();
     m_showChannel = cfg.showChannel();
     m_fadeDuration = cfg.fadeOutSeconds();
     m_rememberFrame = cfg.rememberFrame();
@@ -87,10 +86,10 @@ void OverlayController::applySnapshot(QList<SpeakerSnapshot> snapshot) {
         seen.insert(s.clientID);
         SpeakerRowWidget* row = m_rowsByClient.value(s.clientID, nullptr);
         if (!row) {
-            row = new SpeakerRowWidget(s, m_showAvatar, m_showChannel, m_window);
+            row = new SpeakerRowWidget(s, m_showChannel, m_window);
             m_rowsByClient.insert(s.clientID, row);
         } else {
-            row->updateSnapshot(s, m_showAvatar, m_showChannel, m_fadeDuration);
+            row->updateSnapshot(s, m_showChannel, m_fadeDuration);
             m_layout->removeWidget(row);
         }
         m_layout->addWidget(row);

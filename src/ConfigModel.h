@@ -26,7 +26,6 @@ public:
     bool alwaysOnTop() const { return m_alwaysOnTop; }
     bool rememberFrame() const { return m_rememberFrame; }
     bool clickThrough() const { return m_clickThrough; }
-    bool showAvatar() const { return m_showAvatar; }
     bool showChannel() const { return m_showChannel; }
     bool showSelf() const { return m_showSelf; }
     QRect windowFrame() const { return m_windowFrame; }
@@ -38,7 +37,6 @@ public:
     void setAlwaysOnTop(bool v);
     void setRememberFrame(bool v);
     void setClickThrough(bool v);
-    void setShowAvatar(bool v);
     void setShowChannel(bool v);
     void setShowSelf(bool v);
     void setWindowFrame(QRect r);  // silent
@@ -55,7 +53,6 @@ private:
     bool m_alwaysOnTop = true;
     bool m_rememberFrame = true;
     bool m_clickThrough = false;
-    bool m_showAvatar = false;
     bool m_showChannel = false;
     bool m_showSelf = false;
     QRect m_windowFrame;

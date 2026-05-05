@@ -8,7 +8,7 @@
 #include <QtWidgets/QVBoxLayout>
 
 SpeakerRowWidget::SpeakerRowWidget(const SpeakerSnapshot& snapshot,
-                                   bool showAvatar, bool showChannel,
+                                   bool showChannel,
                                    QWidget* parent)
     : QWidget(parent), m_clientID(snapshot.clientID) {
     setAttribute(Qt::WA_TranslucentBackground, false);
@@ -52,11 +52,10 @@ SpeakerRowWidget::SpeakerRowWidget(const SpeakerSnapshot& snapshot,
     m_opacity->setOpacity(1.0);
     setGraphicsEffect(m_opacity);
 
-    updateSnapshot(snapshot, showAvatar, showChannel, 0.0);
-    (void)showAvatar;  // avatars are a future follow-up item (see tasks/todo.md)
+    updateSnapshot(snapshot, showChannel, 0.0);
 }
 
-void SpeakerRowWidget::updateSnapshot(const SpeakerSnapshot& s, bool /*showAvatar*/,
+void SpeakerRowWidget::updateSnapshot(const SpeakerSnapshot& s,
                                       bool showChannel, double fadeDuration) {
     m_clientID = s.clientID;
     m_talking = s.talking;

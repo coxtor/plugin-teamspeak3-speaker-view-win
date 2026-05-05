@@ -31,7 +31,6 @@ private:
     OverlayWidget* m_window = nullptr;
     QVBoxLayout* m_layout = nullptr;
     QHash<uint16_t, SpeakerRowWidget*> m_rowsByClient;
-    bool m_showAvatar = false;
     bool m_showChannel = false;
     double m_fadeDuration = 2.5;
     bool m_rememberFrame = true;
