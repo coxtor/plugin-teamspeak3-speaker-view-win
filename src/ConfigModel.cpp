@@ -71,6 +71,13 @@ void ConfigModel::save() {
         s.setValue(kKeyFrameY, m_windowFrame.y());
         s.setValue(kKeyFrameW, m_windowFrame.width());
         s.setValue(kKeyFrameH, m_windowFrame.height());
+    } else {
+        // Actively drop stale frame keys so a later load() doesn't pick
+        // up a previously-saved off-screen geometry.
+        s.remove(kKeyFrameX);
+        s.remove(kKeyFrameY);
+        s.remove(kKeyFrameW);
+        s.remove(kKeyFrameH);
     }
     s.sync();
 }

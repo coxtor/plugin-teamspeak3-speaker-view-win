@@ -8,7 +8,27 @@
 
 #include <QtCore/QSet>
 #include <QtCore/QTimer>
+#include <QtGui/QGuiApplication>
+#include <QtGui/QScreen>
 #include <QtWidgets/QVBoxLayout>
+
+namespace {
+// A saved frame is usable only if it intersects at least one currently
+// attached screen by a meaningful amount. Without this check, a frame
+// that was saved on a second monitor (e.g. one that Parallels exposes
+// and later hides) parks the overlay off-screen on every subsequent
+// launch — the window is technically visible to Qt but nothing of it
+// lands on any physical display.
+bool frameIsOnScreen(const QRect& r) {
+    if (!r.isValid()) return false;
+    constexpr int kMinVisible = 80;  // at least an 80x40 corner must land somewhere
+    for (QScreen* s : QGuiApplication::screens()) {
+        const QRect inter = s->availableGeometry().intersected(r);
+        if (inter.width() >= kMinVisible && inter.height() >= 40) return true;
+    }
+    return false;
+}
+}
 
 OverlayController::OverlayController(QObject* parent) : QObject(parent) {
     sv_log("OverlayController: constructing OverlayWidget");
@@ -25,13 +45,23 @@ OverlayController::OverlayController(QObject* parent) : QObject(parent) {
 
     if (auto* cfg = PluginContext::instance().config()) {
         QRect saved = cfg->windowFrame();
-        if (cfg->rememberFrame() && saved.isValid()) {
+        const bool onScreen = frameIsOnScreen(saved);
+        if (cfg->rememberFrame() && saved.isValid() && onScreen) {
             sv_log(QStringLiteral("OverlayController: restoring saved frame %1,%2 %3x%4")
                    .arg(saved.x()).arg(saved.y())
                    .arg(saved.width()).arg(saved.height()));
             m_window->setGeometry(saved);
         } else {
-            sv_log("OverlayController: no saved frame; moving to 120,120");
+            if (saved.isValid() && !onScreen) {
+                sv_log(QStringLiteral("OverlayController: saved frame %1,%2 %3x%4 is off-screen; "
+                                      "using default position")
+                       .arg(saved.x()).arg(saved.y())
+                       .arg(saved.width()).arg(saved.height()));
+                // Forget the stale off-screen frame so next save writes a sane one.
+                cfg->setWindowFrame(QRect());
+            } else {
+                sv_log("OverlayController: no saved frame; moving to 120,120");
+            }
             m_window->move(120, 120);
         }
     } else {

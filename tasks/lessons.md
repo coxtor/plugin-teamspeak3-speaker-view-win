@@ -50,6 +50,22 @@ Fix globally in `CMakeLists.txt`: `target_compile_options(... /utf-8)`.
 This flag both reads source as UTF-8 and emits UTF-8 string literals,
 which matches what Qt expects from `QStringLiteral()`.
 
+## Validate saved window frame against current screens before restoring
+
+A persisted `rememberFrame` geometry can outlive the monitor it was
+saved on — typical scenario: user has a second display attached (e.g.
+Parallels guest VM detecting a Retina display), saves an overlay
+position at x=1980, then later runs without that display. Qt happily
+reports `isVisible() == 1` for a window placed at coordinates that
+intersect no physical screen, so diagnostics that only check visibility
+miss the problem.
+
+On restore, intersect the saved rect with every `QScreen::availableGeometry()`;
+if the overlap is smaller than some threshold (e.g. 80x40 px), discard
+the saved frame and fall back to the default position. Also, when
+saving an empty/invalid QRect, explicitly `QSettings::remove()` the
+frame keys — otherwise the old coordinates linger in settings.ini.
+
 ## Don't start a QGraphicsEffect animation before first paint
 
 Creating a `QGraphicsOpacityEffect` on a widget and immediately starting
