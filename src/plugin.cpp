@@ -31,7 +31,7 @@ enum : int {
 
 #define PLUGIN_API_VERSION 26
 #define PLUGIN_NAME        "Speaker View"
-#define PLUGIN_VERSION     "0.4.1"
+#define PLUGIN_VERSION     "0.4.2"
 #define PLUGIN_AUTHOR      "plugin-teamspeak3-speaker-view-win contributors"
 #define PLUGIN_DESCRIPTION "Separate overlay window listing currently speaking members of your channel, with a configurable fade-out delay."
 
@@ -62,6 +62,14 @@ SV_EXPORT void ts3plugin_shutdown(void) {
 
 SV_EXPORT void ts3plugin_registerPluginID(const char* id) {
     PluginContext::instance().setPluginID(QString::fromUtf8(id));
+}
+
+// Required by TS3's SDK contract when initMenus / infoData allocates
+// memory: TS3 keeps our PluginMenuItem** and item buffers around, then
+// later calls us back with this function to release them. Without this
+// export TS3 silently drops the entire menu structure.
+SV_EXPORT void ts3plugin_freeMemory(void* data) {
+    std::free(data);
 }
 
 SV_EXPORT int ts3plugin_offersConfigure(void) {

@@ -50,6 +50,26 @@ Fix globally in `CMakeLists.txt`: `target_compile_options(... /utf-8)`.
 This flag both reads source as UTF-8 and emits UTF-8 string literals,
 which matches what Qt expects from `QStringLiteral()`.
 
+## TS3 menu items require ts3plugin_freeMemory to be exported
+
+The SDK contract for `ts3plugin_initMenus` is: you `malloc` the menu
+item array and each item, TS3 keeps the pointer, then later calls
+`ts3plugin_freeMemory(ptr)` on the array and each entry to release them.
+
+If `ts3plugin_freeMemory` is **not** exported from the plugin, TS3
+silently refuses to pick up the menu — no error, no log entry, the
+entries just don't appear under Tools → Plugins. Same contract applies
+to `ts3plugin_infoData` allocations.
+
+Always export, even if the plugin does not otherwise allocate for TS3:
+
+```cpp
+extern "C" void ts3plugin_freeMemory(void* data) { std::free(data); }
+```
+
+Allocations passed back to TS3 must come from the same allocator
+(`malloc`/`free`, not `new`/`delete`).
+
 ## Validate saved window frame against current screens before restoring
 
 A persisted `rememberFrame` geometry can outlive the monitor it was
