@@ -33,7 +33,8 @@ bool HttpControlServer::start(uint16_t port) {
     if (!m_server->listen(QHostAddress::LocalHost, port)) {
         sv_log(QStringLiteral("HttpControlServer: listen on port %1 failed: %2")
                    .arg(port).arg(m_server->errorString()));
-        m_server->deleteLater();
+        // Synchronous delete only — see stop() rationale.
+        delete m_server;
         m_server = nullptr;
         return false;
     }
@@ -46,7 +47,12 @@ bool HttpControlServer::start(uint16_t port) {
 void HttpControlServer::stop() {
     if (m_server) {
         m_server->close();
-        m_server->deleteLater();
+        // Synchronous delete only. deleteLater() crashes TS3 on shutdown
+        // and on Reload All: TS3 unloads our DLL right after
+        // ts3plugin_shutdown returns, then Qt's event loop later tries to
+        // dispatch the queued delete-events into freed code. The same
+        // rationale as PluginContext::teardownOnShutdown.
+        delete m_server;
         m_server = nullptr;
     }
     m_running = false;
@@ -114,7 +120,14 @@ void HttpControlServer::onClientReadyRead() {
 
 void HttpControlServer::onClientDisconnected() {
     QTcpSocket* sock = qobject_cast<QTcpSocket*>(sender());
-    if (sock) sock->deleteLater();
+    if (!sock) return;
+    // QTcpSocket parented to QTcpServer (so it dies with the server on
+    // teardown) — but we still want to free the per-connection memory
+    // promptly when the peer disconnects mid-session. deleteLater is
+    // safe here because the event loop is alive at this point; on
+    // shutdown we never reach this path because stop() deletes the
+    // server (and all its socket children) synchronously first.
+    sock->deleteLater();
 }
 
 QByteArray HttpControlServer::jsonState(const char* key, int value) const {
