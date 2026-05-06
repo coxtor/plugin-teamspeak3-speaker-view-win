@@ -98,8 +98,8 @@ When no TS3 server is connected the toggle/state endpoints return
 from PowerShell:
 
 ```powershell
-curl http://127.0.0.1:25640/health
-curl http://127.0.0.1:25640/mic/toggle
+curl http://127.0.0.1:30000/health
+curl http://127.0.0.1:30000/mic/toggle
 ```
 
 Settings are stored per user at

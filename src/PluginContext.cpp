@@ -76,7 +76,7 @@ void PluginContext::applyHttpConfig() {
     if (!m_config) return;
     bool want = m_config->httpControlEnabled();
     int  port = m_config->httpControlPort();
-    if (port < 1 || port > 65535) port = 25640;
+    if (port < 1 || port > 65535) port = 30000;
 
     if (!want) {
         if (m_http) {

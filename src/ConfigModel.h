@@ -63,7 +63,7 @@ private:
     bool m_showSelf = false;
     bool m_showTrayIcon = true;
     bool m_httpControlEnabled = true;
-    int  m_httpControlPort = 25640;
+    int  m_httpControlPort = 30000;
     QRect m_windowFrame;
 
     bool m_suppressNotifications = false;
