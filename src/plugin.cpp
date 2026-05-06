@@ -27,12 +27,16 @@ namespace {
 enum : int {
     kMenuToggleOverlay = 1,
     kMenuOpenSettings  = 2,
+    kMenuQuitTeamSpeak = 3,
 };
+
+constexpr const char* kHotkeyToggleOverlay = "speakerview.toggle";
+constexpr const char* kHotkeyQuitTeamSpeak = "speakerview.quit";
 }
 
 #define PLUGIN_API_VERSION 26
 #define PLUGIN_NAME        "Speaker View"
-#define PLUGIN_VERSION     "0.4.5"
+#define PLUGIN_VERSION     "0.5.0"
 #define PLUGIN_AUTHOR      "plugin-teamspeak3-speaker-view-win contributors"
 #define PLUGIN_DESCRIPTION "Separate overlay window listing currently speaking members of your channel, with a configurable fade-out delay."
 
@@ -149,13 +153,15 @@ PluginMenuItem* makeMenuItem(PluginMenuType type, int id,
 }
 
 SV_EXPORT void ts3plugin_initMenus(struct PluginMenuItem*** menuItems, char** menuIcon) {
-    constexpr int kItemCount = 2;
+    constexpr int kItemCount = 3;
     auto* items = static_cast<PluginMenuItem**>(
         std::malloc(sizeof(PluginMenuItem*) * (kItemCount + 1)));
     items[0] = makeMenuItem(PLUGIN_MENU_TYPE_GLOBAL, kMenuToggleOverlay,
                             "Toggle Speaker View", "");
     items[1] = makeMenuItem(PLUGIN_MENU_TYPE_GLOBAL, kMenuOpenSettings,
                             "Settings\xE2\x80\xA6", "");  // "Settings…"
+    items[2] = makeMenuItem(PLUGIN_MENU_TYPE_GLOBAL, kMenuQuitTeamSpeak,
+                            "Quit TeamSpeak", "");
     items[kItemCount] = nullptr;  // terminator
     *menuItems = items;
     *menuIcon = nullptr;
@@ -175,6 +181,49 @@ SV_EXPORT void ts3plugin_onMenuItemEvent(uint64 /*serverConnectionHandlerID*/,
         // is null — TS3 doesn't pass a parent here, and ConfigDialog is
         // tolerant of that.
         ConfigDialog::presentModal(nullptr);
+    } else if (menuItemID == kMenuQuitTeamSpeak) {
+        // Hard exit by user request — peers see a timeout disconnect.
+        // No graceful unwind; TS3 doesn't expose a "quit cleanly" API
+        // through the plugin SDK anyway.
+        std::exit(0);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Hotkeys: registered with TS3's hotkey manager so the user can bind keys
+// under Tools -> Options -> Hotkeys -> Plugins -> Speaker View. Same keyword
+// strings as the Mac build for consistency across platforms.
+// ---------------------------------------------------------------------------
+
+namespace {
+PluginHotkey* makeHotkey(const char* keyword, const char* description) {
+    auto* h = static_cast<PluginHotkey*>(std::malloc(sizeof(PluginHotkey)));
+    std::strncpy(h->keyword, keyword, PLUGIN_HOTKEY_BUFSZ - 1);
+    h->keyword[PLUGIN_HOTKEY_BUFSZ - 1] = '\0';
+    std::strncpy(h->description, description, PLUGIN_HOTKEY_BUFSZ - 1);
+    h->description[PLUGIN_HOTKEY_BUFSZ - 1] = '\0';
+    return h;
+}
+}
+
+SV_EXPORT void ts3plugin_initHotkeys(struct PluginHotkey*** hotkeys) {
+    constexpr int kHotkeyCount = 2;
+    auto* items = static_cast<PluginHotkey**>(
+        std::malloc(sizeof(PluginHotkey*) * (kHotkeyCount + 1)));
+    items[0] = makeHotkey(kHotkeyToggleOverlay, "Toggle Speaker View");
+    items[1] = makeHotkey(kHotkeyQuitTeamSpeak, "Quit TeamSpeak (hard)");
+    items[kHotkeyCount] = nullptr;
+    *hotkeys = items;
+}
+
+SV_EXPORT void ts3plugin_onHotkeyEvent(const char* keyword) {
+    if (!keyword) return;
+    if (std::strcmp(keyword, kHotkeyToggleOverlay) == 0) {
+        if (auto* o = PluginContext::instance().overlay()) {
+            o->toggleVisible();
+        }
+    } else if (std::strcmp(keyword, kHotkeyQuitTeamSpeak) == 0) {
+        std::exit(0);
     }
 }
 

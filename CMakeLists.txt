@@ -19,7 +19,7 @@ if(NOT EXISTS "${TS3_SDK_INCLUDE}/plugin_definitions.h")
         "See sdk/README.md.")
 endif()
 
-find_package(Qt5 5.15 REQUIRED COMPONENTS Core Gui Widgets)
+find_package(Qt5 5.15 REQUIRED COMPONENTS Core Gui Widgets Network)
 
 set(SRC
     src/plugin.cpp
@@ -32,6 +32,8 @@ set(SRC
     src/SpeakerRowWidget.cpp
     src/OverlayController.cpp
     src/ConfigDialog.cpp
+    src/TrayController.cpp
+    src/HttpControlServer.cpp
 )
 
 set(HDR
@@ -44,6 +46,8 @@ set(HDR
     src/SpeakerRowWidget.h
     src/OverlayController.h
     src/ConfigDialog.h
+    src/TrayController.h
+    src/HttpControlServer.h
 )
 
 add_library(speakerview SHARED ${SRC} ${HDR})
@@ -57,6 +61,7 @@ target_link_libraries(speakerview PRIVATE
     Qt5::Core
     Qt5::Gui
     Qt5::Widgets
+    Qt5::Network
 )
 
 if(WIN32)

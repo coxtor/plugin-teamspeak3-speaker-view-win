@@ -1,0 +1,217 @@
+#include "HttpControlServer.h"
+
+#include "Log.h"
+#include "PluginContext.h"
+#include "TS3Bridge.h"
+
+#include <QtCore/QByteArray>
+#include <QtCore/QString>
+#include <QtCore/QTimer>
+#include <QtNetwork/QHostAddress>
+#include <QtNetwork/QTcpServer>
+#include <QtNetwork/QTcpSocket>
+
+#include <cstdlib>
+
+HttpControlServer::HttpControlServer(QObject* parent) : QObject(parent) {}
+
+HttpControlServer::~HttpControlServer() {
+    stop();
+}
+
+bool HttpControlServer::start(uint16_t port) {
+    if (m_running && m_port == port) return true;
+    if (m_server) stop();
+
+    m_server = new QTcpServer(this);
+    connect(m_server, &QTcpServer::newConnection,
+            this, &HttpControlServer::onNewConnection);
+
+    // 127.0.0.1 binding only — never expose to the LAN. No auth on the
+    // wire; the contract is "if you can reach localhost on this machine,
+    // you can already control TS3 anyway".
+    if (!m_server->listen(QHostAddress::LocalHost, port)) {
+        sv_log(QStringLiteral("HttpControlServer: listen on port %1 failed: %2")
+                   .arg(port).arg(m_server->errorString()));
+        m_server->deleteLater();
+        m_server = nullptr;
+        return false;
+    }
+    m_port = port;
+    m_running = true;
+    sv_log(QStringLiteral("HttpControlServer listening on 127.0.0.1:%1").arg(port));
+    return true;
+}
+
+void HttpControlServer::stop() {
+    if (m_server) {
+        m_server->close();
+        m_server->deleteLater();
+        m_server = nullptr;
+    }
+    m_running = false;
+    m_port = 0;
+}
+
+void HttpControlServer::onNewConnection() {
+    while (m_server && m_server->hasPendingConnections()) {
+        QTcpSocket* sock = m_server->nextPendingConnection();
+        if (!sock) break;
+        connect(sock, &QTcpSocket::readyRead,
+                this, &HttpControlServer::onClientReadyRead);
+        connect(sock, &QTcpSocket::disconnected,
+                this, &HttpControlServer::onClientDisconnected);
+        // Hard timeout in case a client connects and never sends bytes.
+        QTimer::singleShot(5000, sock, [sock] {
+            if (sock && sock->state() != QAbstractSocket::UnconnectedState) {
+                sock->abort();
+            }
+        });
+    }
+}
+
+void HttpControlServer::onClientReadyRead() {
+    QTcpSocket* sock = qobject_cast<QTcpSocket*>(sender());
+    if (!sock) return;
+
+    // We only need the request line; cap at 4 KiB to ignore malformed
+    // clients trying to flood us.
+    QByteArray buf = sock->peek(4096);
+    int eolHeader = buf.indexOf("\r\n\r\n");
+    if (eolHeader < 0) eolHeader = buf.indexOf("\n\n");
+    if (eolHeader < 0) {
+        // Headers not complete yet; wait for more bytes.
+        if (buf.size() >= 4096) {
+            writeResponse(sock, 400, "text/plain", "headers too large\n");
+            sock->disconnectFromHost();
+        }
+        return;
+    }
+
+    // Consume the headers we just peeked.
+    sock->read(eolHeader + 4 > buf.size() ? buf.size() : eolHeader + 4);
+
+    int eolFirst = buf.indexOf("\r\n");
+    if (eolFirst < 0) eolFirst = buf.indexOf("\n");
+    if (eolFirst < 0) {
+        writeResponse(sock, 400, "text/plain", "malformed request line\n");
+        sock->disconnectFromHost();
+        return;
+    }
+    QString reqLine = QString::fromUtf8(buf.left(eolFirst));
+    QStringList parts = reqLine.split(' ');
+    if (parts.size() < 2) {
+        writeResponse(sock, 400, "text/plain", "malformed request line\n");
+        sock->disconnectFromHost();
+        return;
+    }
+    QString method = parts[0];
+    QString path   = parts[1];
+
+    sv_log(QStringLiteral("HTTP %1 %2").arg(method, path));
+    handleRequest(sock, method, path);
+}
+
+void HttpControlServer::onClientDisconnected() {
+    QTcpSocket* sock = qobject_cast<QTcpSocket*>(sender());
+    if (sock) sock->deleteLater();
+}
+
+QByteArray HttpControlServer::jsonState(const char* key, int value) const {
+    if (value < 0) {
+        return QByteArray("{\"") + key + "\":null,\"connected\":false}";
+    }
+    return QByteArray("{\"") + key + "\":" + (value ? "true" : "false")
+           + ",\"connected\":true}";
+}
+
+void HttpControlServer::handleRequest(QTcpSocket* sock, const QString& method,
+                                      const QString& path) {
+    Q_UNUSED(method);
+
+    TS3Bridge* bridge = PluginContext::instance().bridge();
+
+    auto reply = [&](int v, const char* key) {
+        // ObjC-style "send to nil returns 0" doesn't apply in C++; we just
+        // gate the call on bridge != nullptr in the callers.
+        QByteArray body = jsonState(key, v);
+        writeResponse(sock, 200, "application/json", body);
+    };
+    auto withBridge = [&](auto fn, const char* key) {
+        int v = bridge ? fn(bridge) : -1;
+        reply(v, key);
+    };
+
+    if (path == "/" || path == "/health") {
+        writeResponse(sock, 200, "text/plain", "speakerview-control ok\n");
+        return;
+    }
+    if (path == "/mic/toggle") {
+        withBridge([](TS3Bridge* b){ return b->toggleSelfMicMuted(); }, "muted");
+        return;
+    }
+    if (path == "/mic/state") {
+        withBridge([](TS3Bridge* b){ return b->selfMicMuted(); }, "muted");
+        return;
+    }
+    if (path == "/speaker/toggle") {
+        withBridge([](TS3Bridge* b){ return b->toggleSelfSpeakerMuted(); }, "muted");
+        return;
+    }
+    if (path == "/speaker/state") {
+        withBridge([](TS3Bridge* b){ return b->selfSpeakerMuted(); }, "muted");
+        return;
+    }
+    if (path == "/away/toggle") {
+        withBridge([](TS3Bridge* b){ return b->toggleSelfAway(); }, "away");
+        return;
+    }
+    if (path == "/away/state") {
+        withBridge([](TS3Bridge* b){ return b->selfAway(); }, "away");
+        return;
+    }
+    if (path == "/silent/toggle") {
+        withBridge([](TS3Bridge* b){ return b->toggleSelfSilentMode(); }, "silent");
+        return;
+    }
+    if (path == "/silent/state") {
+        withBridge([](TS3Bridge* b){ return b->selfSilentMode(); }, "silent");
+        return;
+    }
+    if (path == "/quit") {
+        writeResponse(sock, 200, "text/plain", "bye\n");
+        sock->flush();
+        // Give Stream Deck (or curl) a tick to read the response, then
+        // hard-exit. Same semantics as the Mac plugin.
+        QTimer::singleShot(50, []() {
+            sv_log("Quit TeamSpeak requested via HTTP");
+            std::exit(0);
+        });
+        return;
+    }
+
+    writeResponse(sock, 404, "text/plain", "unknown route\n");
+}
+
+void HttpControlServer::writeResponse(QTcpSocket* sock, int status,
+                                      const QByteArray& contentType,
+                                      const QByteArray& body) {
+    const char* reason = (status == 200) ? "OK"
+                       : (status == 400) ? "Bad Request"
+                       : (status == 404) ? "Not Found"
+                                         : "Error";
+    QByteArray header;
+    header.reserve(256);
+    header.append("HTTP/1.1 ").append(QByteArray::number(status)).append(' ')
+          .append(reason).append("\r\n")
+          .append("Content-Type: ").append(contentType).append("\r\n")
+          .append("Content-Length: ").append(QByteArray::number(body.size())).append("\r\n")
+          .append("Cache-Control: no-store\r\n")
+          .append("Connection: close\r\n")
+          .append("Access-Control-Allow-Origin: *\r\n")
+          .append("\r\n");
+    sock->write(header);
+    sock->write(body);
+    sock->flush();
+    sock->disconnectFromHost();
+}

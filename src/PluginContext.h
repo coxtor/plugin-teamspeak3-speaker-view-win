@@ -10,6 +10,8 @@ class SpeakerTracker;
 class OverlayController;
 class ConfigModel;
 class ConfigDialog;
+class TrayController;
+class HttpControlServer;
 
 class PluginContext : public QObject {
     Q_OBJECT
@@ -33,8 +35,14 @@ public:
     void setConfigDialog(ConfigDialog* d) { m_configDialog = d; }
     ConfigDialog* configDialog() const { return m_configDialog; }
 
+    TrayController*    tray() const { return m_tray; }
+    HttpControlServer* http() const { return m_http; }
+
     void setupOnInit();
     void teardownOnShutdown();
+
+private slots:
+    void onConfigChanged();
 
 private:
     PluginContext() = default;
@@ -45,9 +53,14 @@ private:
     QString m_pluginID;
     uint64_t m_activeServerHandlerID = 0;
 
+    void applyHttpConfig();
+    void applyTrayConfig();
+
     TS3Bridge* m_bridge = nullptr;
     SpeakerTracker* m_tracker = nullptr;
     OverlayController* m_overlay = nullptr;
     ConfigModel* m_config = nullptr;
     ConfigDialog* m_configDialog = nullptr;
+    TrayController* m_tray = nullptr;
+    HttpControlServer* m_http = nullptr;
 };

@@ -9,8 +9,16 @@ speaking — think Mumble's floating speaker list, but for TS3.
 - Frameless window with a custom title bar, native Windows drop shadow,
   and Windows 11 rounded corners.
 - Follows the OS light / dark theme.
-- Menu entry **Tools → Plugins → Speaker View → Toggle Speaker View**
-  to show or hide the overlay at any time.
+- Menu entries under **Tools → Plugins → Speaker View** to toggle the
+  overlay, open the settings dialog, or quit TeamSpeak.
+- Windows tray icon (notification area) with one-click Toggle / Settings
+  / *Quit TeamSpeak*, independent of whether TS3 is in the foreground.
+- Global hotkeys for Toggle and Quit, bindable under
+  **Tools → Options → Hotkeys**.
+- Localhost HTTP control server for Stream Deck and other external
+  integrations — the cross-platform
+  [`streamdeck-plugin-teamspeak-control`](../streamdeck-plugin-teamspeak-control)
+  plugin pairs with this endpoint and reflects live state on the keys.
 
 This is the **Windows port** of the original macOS plugin
 ([plugin-teamspeak3-speaker-view](../plugin-teamspeak3-speaker-view));
@@ -52,7 +60,9 @@ via **Tools → Plugins → Speaker View → Toggle Speaker View**.
 Settings dialog: **Tools → Options → Addons → Plugins → Speaker View →
 Settings** (the gear icon in TS3's plugin list).
 
-Available settings:
+The dialog has two tabs:
+
+**General** — overlay-related settings:
 
 | Setting | Effect |
 | --- | --- |
@@ -63,10 +73,59 @@ Available settings:
 | Click-through | Mouse events pass through the overlay to the window below. |
 | Show channel name | Adds a second line per speaker with the channel name. |
 | Also show my own voice | Includes you in the list when you talk. |
+| Show tray icon | Windows notification-area icon with Toggle / Settings / Quit TeamSpeak. |
+
+**Stream Deck / HTTP** — external-control endpoint:
+
+| Setting | Effect |
+| --- | --- |
+| Enable HTTP control server | Bind a tiny HTTP/1.1 listener to `127.0.0.1:<port>` for Stream Deck / curl / scripts. |
+| Port | Listening port; click *Apply* to restart on a new value. |
+
+Routes (all `GET`, JSON responses):
+
+| Path | Effect |
+| --- | --- |
+| `/health` | Liveness probe — `speakerview-control ok`. |
+| `/mic/state`, `/mic/toggle` | Microphone (input) mute. |
+| `/speaker/state`, `/speaker/toggle` | Speaker (output) mute. |
+| `/away/state`, `/away/toggle` | Away ↔ available. |
+| `/silent/state`, `/silent/toggle` | Combined: mic + speaker + away in lockstep. |
+| `/quit` | Hard-quit TS3 (`exit(0)`). |
+
+When no TS3 server is connected the toggle/state endpoints return
+`{"…":null,"connected":false}` and the request is a no-op. Smoke-test
+from PowerShell:
+
+```powershell
+curl http://127.0.0.1:25640/health
+curl http://127.0.0.1:25640/mic/toggle
+```
 
 Settings are stored per user at
 `%APPDATA%\TS3Client\plugins\speaker-view\settings.ini`, separate from
 TS3's own config.
+
+### Quick access — hotkeys
+
+Two hotkey keywords are exposed to TS3's hotkey manager:
+
+- **Toggle Speaker View**
+- **Quit TeamSpeak (hard)**
+
+Bind them under **Tools → Options → Hotkeys → Add → Plugins → Speaker
+View** to keys of your choice.
+
+### Quick access — Stream Deck
+
+Pair this plugin with the
+[`streamdeck-plugin-teamspeak-control`](../streamdeck-plugin-teamspeak-control)
+Stream Deck plugin: drag the *Mic / Speaker / Away / Silent / Quit*
+actions onto your keys, set the host to `127.0.0.1` and the port to
+match the one shown in the *Stream Deck / HTTP* tab. Each button polls
+the state endpoint at the configured interval, so the icon always
+reflects the real TS3 state — even when you toggle mute via the UI or
+a hotkey.
 
 ## Behaviour that was deliberately designed
 
@@ -83,15 +142,29 @@ TS3's own config.
 
 ## Build from source
 
-There is no developer Windows machine. **CI is the build machine.** Push
-to `main` or open a PR; GitHub Actions builds `speakerview.dll`,
-packages it as `.ts3_plugin`, and uploads the artifact.
+There is no developer Windows machine. **CI is the build machine.**
 
-Toolchain used by CI (defined in `.github/workflows/build.yml`):
+Workflow (`.github/workflows/build.yml`) triggers on every push to
+`main` and on every pull request. It produces:
+
+- `speakerview.dll` (the plugin binary)
+- `speakerview.ini` (TS3 metadata)
+- `speakerview-<version>.ts3_plugin` (zipped, ready to double-click)
+
+…and uploads them as a single workflow artifact named
+`speakerview-windows-x64`. To get a build:
+
+1. Push a branch (or open a PR). The *build* workflow runs automatically.
+2. When it finishes (≈ 5 min), open the run on the Actions page.
+3. Scroll to the *Artifacts* section at the bottom; download the ZIP.
+4. Inside, the `.ts3_plugin` is what end users want — see *Install* above.
+
+Toolchain used by CI:
 
 - GitHub Actions `windows-latest` runner
 - MSVC x64 via `ilammy/msvc-dev-cmd`
-- Qt 5.15.2 via `jurplel/install-qt-action`
+- Qt 5.15.2 via `jurplel/install-qt-action` (with the *Network* module
+  added in 0.5.0 for the HTTP control server)
 - Ninja generator
 - TS3 Plugin SDK headers fetched from
   [github.com/teamspeak/ts3client-pluginsdk](https://github.com/teamspeak/ts3client-pluginsdk)

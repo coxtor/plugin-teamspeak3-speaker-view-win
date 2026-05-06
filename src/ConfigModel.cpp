@@ -12,6 +12,9 @@ constexpr const char* kKeyRememberFrame= "rememberFrame";
 constexpr const char* kKeyClickThrough = "clickThrough";
 constexpr const char* kKeyShowChannel  = "showChannel";
 constexpr const char* kKeyShowSelf     = "showSelf";
+constexpr const char* kKeyShowTrayIcon = "showTrayIcon";
+constexpr const char* kKeyHttpEnabled  = "httpControlEnabled";
+constexpr const char* kKeyHttpPort     = "httpControlPort";
 constexpr const char* kKeyFrameX       = "windowFrameX";
 constexpr const char* kKeyFrameY       = "windowFrameY";
 constexpr const char* kKeyFrameW       = "windowFrameW";
@@ -43,8 +46,11 @@ void ConfigModel::load() {
     m_alwaysOnTop    = s.value(kKeyAlwaysOnTop,  m_alwaysOnTop).toBool();
     m_rememberFrame  = s.value(kKeyRememberFrame,m_rememberFrame).toBool();
     m_clickThrough   = s.value(kKeyClickThrough, m_clickThrough).toBool();
-    m_showChannel    = s.value(kKeyShowChannel,  m_showChannel).toBool();
-    m_showSelf       = s.value(kKeyShowSelf,     m_showSelf).toBool();
+    m_showChannel        = s.value(kKeyShowChannel,  m_showChannel).toBool();
+    m_showSelf           = s.value(kKeyShowSelf,     m_showSelf).toBool();
+    m_showTrayIcon       = s.value(kKeyShowTrayIcon, m_showTrayIcon).toBool();
+    m_httpControlEnabled = s.value(kKeyHttpEnabled,  m_httpControlEnabled).toBool();
+    m_httpControlPort    = s.value(kKeyHttpPort,     m_httpControlPort).toInt();
 
     if (s.contains(kKeyFrameX) && s.contains(kKeyFrameY)
         && s.contains(kKeyFrameW) && s.contains(kKeyFrameH)) {
@@ -66,6 +72,9 @@ void ConfigModel::save() {
     s.setValue(kKeyClickThrough,  m_clickThrough);
     s.setValue(kKeyShowChannel,   m_showChannel);
     s.setValue(kKeyShowSelf,      m_showSelf);
+    s.setValue(kKeyShowTrayIcon,  m_showTrayIcon);
+    s.setValue(kKeyHttpEnabled,   m_httpControlEnabled);
+    s.setValue(kKeyHttpPort,      m_httpControlPort);
     if (m_windowFrame.isValid()) {
         s.setValue(kKeyFrameX, m_windowFrame.x());
         s.setValue(kKeyFrameY, m_windowFrame.y());
@@ -100,8 +109,11 @@ SV_SET(DisplayMode,    m_displayMode,    DisplayMode)
 SV_SET(AlwaysOnTop,    m_alwaysOnTop,    bool)
 SV_SET(RememberFrame,  m_rememberFrame,  bool)
 SV_SET(ClickThrough,   m_clickThrough,   bool)
-SV_SET(ShowChannel,    m_showChannel,    bool)
-SV_SET(ShowSelf,       m_showSelf,       bool)
+SV_SET(ShowChannel,        m_showChannel,        bool)
+SV_SET(ShowSelf,           m_showSelf,           bool)
+SV_SET(ShowTrayIcon,       m_showTrayIcon,       bool)
+SV_SET(HttpControlEnabled, m_httpControlEnabled, bool)
+SV_SET(HttpControlPort,    m_httpControlPort,    int)
 
 // windowFrame is silent — the UI writes it from its own geometry
 // notifications and must not get a config-change callback in return.

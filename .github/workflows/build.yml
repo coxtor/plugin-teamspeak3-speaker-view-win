@@ -26,6 +26,8 @@ jobs:
           host: 'windows'
           target: 'desktop'
           arch: 'win64_msvc2019_64'
+          # qtbase covers Core/Gui/Widgets/Network — Network is required by
+          # the HTTP control server (HttpControlServer.cpp uses QTcpServer).
           modules: ''
           cache: true
 
