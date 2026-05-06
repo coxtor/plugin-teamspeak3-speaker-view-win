@@ -19,8 +19,22 @@ TrayController::TrayController(QObject* parent) : QObject(parent) {
 }
 
 TrayController::~TrayController() {
+    // Synchronous teardown only — same shutdown-race rationale as
+    // PluginContext::teardownOnShutdown. m_menu is a parentless QWidget
+    // (Qt's QSystemTrayIcon::setContextMenu does not take ownership),
+    // so it would otherwise outlive us as a top-level widget and be
+    // destroyed by the global QApplication exit handler — by which
+    // point TS3's WebEngineCore is already half-torn-down and the
+    // process aborts in Qt5WebEngineCore.dll.
     if (m_tray) {
         m_tray->hide();
+        m_tray->setContextMenu(nullptr);
+        delete m_tray;
+        m_tray = nullptr;
+    }
+    if (m_menu) {
+        delete m_menu;
+        m_menu = nullptr;
     }
 }
 
@@ -30,6 +44,10 @@ void TrayController::buildTray() {
         return;
     }
 
+    // No parent for QMenu (QSystemTrayIcon::setContextMenu does not take
+    // ownership). The destructor frees it synchronously — see the comment
+    // there for why a parentless top-level QWidget would otherwise crash
+    // TS3 at shutdown via Qt5WebEngineCore.
     m_menu = new QMenu();
     m_menu->addAction(QStringLiteral("Toggle Speaker View"),
                       this, &TrayController::onToggleOverlay);
