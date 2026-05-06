@@ -26,12 +26,13 @@ namespace {
 // with our registered plugin ID so there are no cross-plugin collisions.
 enum : int {
     kMenuToggleOverlay = 1,
+    kMenuOpenSettings  = 2,
 };
 }
 
 #define PLUGIN_API_VERSION 26
 #define PLUGIN_NAME        "Speaker View"
-#define PLUGIN_VERSION     "0.4.4"
+#define PLUGIN_VERSION     "0.4.5"
 #define PLUGIN_AUTHOR      "plugin-teamspeak3-speaker-view-win contributors"
 #define PLUGIN_DESCRIPTION "Separate overlay window listing currently speaking members of your channel, with a configurable fade-out delay."
 
@@ -148,11 +149,13 @@ PluginMenuItem* makeMenuItem(PluginMenuType type, int id,
 }
 
 SV_EXPORT void ts3plugin_initMenus(struct PluginMenuItem*** menuItems, char** menuIcon) {
-    constexpr int kItemCount = 1;
+    constexpr int kItemCount = 2;
     auto* items = static_cast<PluginMenuItem**>(
         std::malloc(sizeof(PluginMenuItem*) * (kItemCount + 1)));
     items[0] = makeMenuItem(PLUGIN_MENU_TYPE_GLOBAL, kMenuToggleOverlay,
                             "Toggle Speaker View", "");
+    items[1] = makeMenuItem(PLUGIN_MENU_TYPE_GLOBAL, kMenuOpenSettings,
+                            "Settings\xE2\x80\xA6", "");  // "Settings…"
     items[kItemCount] = nullptr;  // terminator
     *menuItems = items;
     *menuIcon = nullptr;
@@ -167,6 +170,11 @@ SV_EXPORT void ts3plugin_onMenuItemEvent(uint64 /*serverConnectionHandlerID*/,
         if (auto* o = PluginContext::instance().overlay()) {
             o->toggleVisible();
         }
+    } else if (menuItemID == kMenuOpenSettings) {
+        // Open the same dialog TS3 invokes through the gear icon. Parent
+        // is null — TS3 doesn't pass a parent here, and ConfigDialog is
+        // tolerant of that.
+        ConfigDialog::presentModal(nullptr);
     }
 }
 
