@@ -1,6 +1,7 @@
 #include "OverlayWidget.h"
 
 #include "Log.h"
+#include "Theme.h"
 
 #include <QtCore/QEvent>
 #include <QtGui/QHideEvent>
@@ -59,27 +60,6 @@ void applyNativeWindowEffects(HWND hwnd) {
                             &corner, sizeof(corner));
 #else
     (void)hwnd;
-#endif
-}
-
-// Follow the Windows 10/11 "Apps use light/dark theme" setting. Read
-// straight from the registry — Qt 5.15 has no portable dark-mode API,
-// and we don't want to pull in QtWinExtras just for this.
-bool systemUsesDarkTheme() {
-#ifdef _WIN32
-    DWORD lightMode = 1;  // default to light if the key is missing
-    DWORD sz = sizeof(lightMode);
-    HKEY key = nullptr;
-    if (::RegOpenKeyExW(HKEY_CURRENT_USER,
-            L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
-            0, KEY_READ, &key) == ERROR_SUCCESS) {
-        ::RegQueryValueExW(key, L"AppsUseLightTheme", nullptr, nullptr,
-                           reinterpret_cast<LPBYTE>(&lightMode), &sz);
-        ::RegCloseKey(key);
-    }
-    return lightMode == 0;
-#else
-    return false;
 #endif
 }
 
@@ -180,7 +160,7 @@ void OverlayWidget::buildChrome() {
 }
 
 void OverlayWidget::applyTheme() {
-    const Palette pal = paletteForTheme(systemUsesDarkTheme());
+    const Palette pal = paletteForTheme(sv_systemUsesDarkTheme());
     m_contentBg = pal.contentBg;
     m_border    = pal.border;
 

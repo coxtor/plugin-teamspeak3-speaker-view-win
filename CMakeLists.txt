@@ -34,6 +34,7 @@ set(SRC
     src/ConfigDialog.cpp
     src/TrayController.cpp
     src/HttpControlServer.cpp
+    src/Theme.cpp
 )
 
 set(HDR
@@ -48,6 +49,7 @@ set(HDR
     src/ConfigDialog.h
     src/TrayController.h
     src/HttpControlServer.h
+    src/Theme.h
 )
 
 add_library(speakerview SHARED ${SRC} ${HDR})

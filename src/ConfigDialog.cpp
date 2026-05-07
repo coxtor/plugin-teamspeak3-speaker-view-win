@@ -3,6 +3,7 @@
 #include "ConfigModel.h"
 #include "HttpControlServer.h"
 #include "PluginContext.h"
+#include "Theme.h"
 
 #include <QtCore/QTimer>
 #include <QtGui/QCloseEvent>
@@ -51,6 +52,10 @@ ConfigDialog::ConfigDialog(QWidget* parent) : QDialog(parent) {
     auto* sd = new QWidget(m_tabs);
     buildStreamDeckTab(sd);
     m_tabs->addTab(sd, QStringLiteral("Stream Deck / HTTP"));
+
+    // Apply the dark palette / stylesheet *after* the widget tree is built
+    // so every descendant inherits it. No-op on light-mode systems.
+    sv_applyThemeToDialog(this);
 
     loadFromModel();
 }
