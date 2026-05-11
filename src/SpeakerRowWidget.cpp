@@ -23,10 +23,13 @@ SpeakerRowWidget::SpeakerRowWidget(const SpeakerSnapshot& snapshot,
     textColumn->setContentsMargins(0, 0, 0, 0);
     textColumn->setSpacing(0);
 
-    // No hardcoded text colors: fall back to the host's palette so the
-    // labels stay readable against whatever background the host picks
-    // for the tool window.
+    // Object names let OverlayWidget's content-pane stylesheet target the
+    // two labels independently (nick = primary text, channel = dim).
+    // Palette inheritance alone is not enough because the host (TS3 dark
+    // skin) ships a global QLabel stylesheet that wins over palette and
+    // would otherwise paint the rows black-on-black.
     m_nickLabel = new QLabel(this);
+    m_nickLabel->setObjectName(QStringLiteral("svNickLabel"));
     QFont f = m_nickLabel->font();
     f.setPointSizeF(f.pointSizeF() + 1.0);
     f.setWeight(QFont::Medium);
@@ -34,15 +37,10 @@ SpeakerRowWidget::SpeakerRowWidget(const SpeakerSnapshot& snapshot,
     textColumn->addWidget(m_nickLabel);
 
     m_channelLabel = new QLabel(this);
+    m_channelLabel->setObjectName(QStringLiteral("svChannelLabel"));
     QFont sf = m_channelLabel->font();
     sf.setPointSizeF(std::max(7.0, sf.pointSizeF() - 2.0));
     m_channelLabel->setFont(sf);
-    // Channel label picks up the disabled-text / placeholder palette role
-    // so it visually subordinates to the nickname without hardcoding a hex.
-    QPalette sp = m_channelLabel->palette();
-    sp.setColor(QPalette::WindowText,
-                sp.color(QPalette::Disabled, QPalette::WindowText));
-    m_channelLabel->setPalette(sp);
     textColumn->addWidget(m_channelLabel);
 
     outer->addLayout(textColumn);

@@ -182,6 +182,22 @@ void OverlayWidget::applyTheme() {
         // Text role so child QLabels that inherit the palette pick it up.
         p.setColor(QPalette::Text,       pal.contentText);
         m_contentPane->setPalette(p);
+
+        // TS3's dark skin ships a global QLabel stylesheet that wins over
+        // palette inheritance — without an explicit rule here the speaker
+        // rows render as dark text on our dark content background. Scope
+        // the stylesheet to the content pane (and to our own object names)
+        // so we don't bleed onto sibling host widgets. Qt stylesheets
+        // accept #RRGGBB and rgba() reliably; #AARRGGBB does not parse on
+        // every Qt 5 build, so spell out rgba() for the dim channel label.
+        m_contentPane->setStyleSheet(QStringLiteral(
+            "QLabel#svNickLabel    { color: %1; background: transparent; }"
+            "QLabel#svChannelLabel { color: rgba(%2, %3, %4, 140);"
+            "                        background: transparent; }")
+            .arg(pal.contentText.name(QColor::HexRgb))
+            .arg(pal.contentText.red())
+            .arg(pal.contentText.green())
+            .arg(pal.contentText.blue()));
     }
     if (m_closeBtn) {
         const QString css = QStringLiteral(
@@ -339,3 +355,43 @@ void OverlayWidget::resizeEvent(QResizeEvent* event) {
     QWidget::resizeEvent(event);
     emit frameChanged();
 }
+
+#ifdef _WIN32
+bool OverlayWidget::nativeEvent(const QByteArray& eventType,
+                                void* message, long* result) {
+    // Windows broadcasts WM_POWERBROADCAST around suspend/resume. A user
+    // reported that after hibernate the overlay sometimes sinks behind the
+    // TS3 main window despite always-on-top being set, and only a hide/show
+    // toggle restores Z-order. We can't reproduce reliably yet, so we log
+    // the relevant state on every power transition. If the bug recurs, the
+    // user can hand us the TS3 log and we'll see exactly which transition
+    // dropped the topmost flag, current vs. desired Z-state, and visibility.
+    if (eventType == "windows_generic_MSG" || eventType == "windows_dispatcher_MSG") {
+        const MSG* msg = static_cast<const MSG*>(message);
+        if (msg && msg->message == WM_POWERBROADCAST) {
+            const char* tag = "OTHER";
+            switch (msg->wParam) {
+                case PBT_APMSUSPEND:           tag = "SUSPEND"; break;
+                case PBT_APMRESUMESUSPEND:     tag = "RESUME_SUSPEND"; break;
+                case PBT_APMRESUMEAUTOMATIC:   tag = "RESUME_AUTOMATIC"; break;
+                case PBT_APMPOWERSTATUSCHANGE: tag = "POWER_STATUS_CHANGE"; break;
+                default: break;
+            }
+            HWND hwnd = reinterpret_cast<HWND>(winId());
+            const LONG_PTR ex = ::GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+            const bool isTopmostNative = (ex & WS_EX_TOPMOST) != 0;
+            sv_log(QStringLiteral(
+                "WM_POWERBROADCAST %1 (wParam=0x%2): visible=%3 minimized=%4 "
+                "wantTopmost=%5 nativeTopmost=%6 geom=%7,%8 %9x%10")
+                .arg(QString::fromLatin1(tag))
+                .arg(static_cast<quint64>(msg->wParam), 0, 16)
+                .arg(isVisible())
+                .arg(isMinimized())
+                .arg(m_alwaysOnTop)
+                .arg(isTopmostNative)
+                .arg(x()).arg(y()).arg(width()).arg(height()));
+        }
+    }
+    return QWidget::nativeEvent(eventType, message, result);
+}
+#endif

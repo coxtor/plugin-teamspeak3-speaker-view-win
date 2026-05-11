@@ -159,6 +159,21 @@ flags / palette / style at runtime) intact. The fix was structural:
 freeze window flags after construction and route runtime changes
 through Win32. Compounding flicks hides the root cause.
 
+## TS3 dark skin overrides QLabel palette — use a stylesheet rule
+
+`QPalette::WindowText` / `QPalette::Text` on a content widget is the
+obvious-looking knob to colour child `QLabel`s, but TS3's dark skin
+ships a global `QLabel { color: ... }` stylesheet rule that beats
+palette inheritance (Qt's documented order: stylesheet > palette).
+Symptom: in dark mode, speaker rows rendered with near-black text on
+our dark grey content background — illegible.
+
+Fix: give labels object names and add a scoped stylesheet on the
+content pane (`QLabel#svNickLabel { color: …; }`). Scope it to the
+pane (not the top-level window) so it can't bleed onto sibling host
+widgets. Light mode is unaffected because the host skin's QLabel rule
+also assumes light backgrounds — explicit colours just keep us in sync.
+
 ## Two Qt-palette pitfalls when toggling display modes
 
 1. `QPalette()` (default-constructed) is not "reset to host" — it is an

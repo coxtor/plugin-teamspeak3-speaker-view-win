@@ -38,6 +38,9 @@ protected:
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
     void paintEvent(QPaintEvent* event) override;
+#ifdef _WIN32
+    bool nativeEvent(const QByteArray& eventType, void* message, long* result) override;
+#endif
 
 private:
     void applyWindowFlags();            // constructor-only
