@@ -157,6 +157,27 @@ uint64_t TS3Bridge::resolveChannelPath(const QString& path) const {
     uint64_t schid = currentServerHandlerID();
     if (schid == 0) return 0;
 
+    // Pure-numeric input is interpreted as a literal channelID. Useful when
+    // the user has the ID handy from the TS3 server's channel admin and
+    // doesn't want to fight name resolution. We verify the channel actually
+    // exists by reading its CHANNEL_NAME — if that fails we fall through to
+    // the regular path lookup so e.g. a channel literally named "42" still
+    // works.
+    {
+        const QString trimmedAll = path.trimmed();
+        bool numeric = false;
+        const qulonglong n = trimmedAll.toULongLong(&numeric);
+        if (numeric && n > 0) {
+            char* nameBuf = nullptr;
+            if (fns->getChannelVariableAsString(
+                    schid, static_cast<uint64>(n), CHANNEL_NAME, &nameBuf)
+                    == ERROR_ok) {
+                if (nameBuf) fns->freeMemory(nameBuf);
+                return static_cast<uint64_t>(n);
+            }
+        }
+    }
+
     // Normalise: split on '/', trim, drop empty. Lets the user type
     // "Lobby/AFK", "/Lobby/AFK/", or just "AFK" alike.
     QStringList parts;
