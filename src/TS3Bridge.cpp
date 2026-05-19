@@ -2,6 +2,7 @@
 #include "PluginContext.h"
 
 #include <QtCore/QByteArray>
+#include <QtCore/QHash>
 #include <QtCore/QStringList>
 
 #include <string>
@@ -156,29 +157,101 @@ uint64_t TS3Bridge::resolveChannelPath(const QString& path) const {
     uint64_t schid = currentServerHandlerID();
     if (schid == 0) return 0;
 
-    // getChannelIDFromChannelNames takes a NULL-terminated char** of UTF-8
-    // segments, e.g. {"Lobby", "AFK", NULL}.
-    QStringList parts = path.split('/', Qt::SkipEmptyParts);
+    // Normalise: split on '/', trim, drop empty. Lets the user type
+    // "Lobby/AFK", "/Lobby/AFK/", or just "AFK" alike.
+    QStringList parts;
+    for (const QString& seg : path.split('/', Qt::SkipEmptyParts)) {
+        QString t = seg.trimmed();
+        if (!t.isEmpty()) parts.append(t);
+    }
     if (parts.isEmpty()) return 0;
 
-    std::vector<QByteArray> storage;
-    storage.reserve(static_cast<size_t>(parts.size()));
-    std::vector<char*> argv;
-    argv.reserve(static_cast<size_t>(parts.size()) + 1);
-    for (const QString& seg : parts) {
-        QString trimmed = seg.trimmed();
-        if (trimmed.isEmpty()) continue;
-        storage.emplace_back(trimmed.toUtf8());
-        argv.push_back(storage.back().data());
+    // First attempt: TS3's own exact-path resolver. Cheap when it works,
+    // requires the full path from the server root and an exact name match.
+    // Fails for partial paths like a bare leaf name and for channels with
+    // quirky names (spacers, special characters, hidden whitespace).
+    {
+        std::vector<QByteArray> storage;
+        storage.reserve(static_cast<size_t>(parts.size()));
+        std::vector<char*> argv;
+        argv.reserve(static_cast<size_t>(parts.size()) + 1);
+        for (const QString& seg : parts) {
+            storage.emplace_back(seg.toUtf8());
+            argv.push_back(storage.back().data());
+        }
+        argv.push_back(nullptr);
+        uint64 result = 0;
+        if (fns->getChannelIDFromChannelNames(schid, argv.data(), &result)
+                == ERROR_ok && result != 0) {
+            return result;
+        }
     }
-    if (argv.empty()) return 0;
-    argv.push_back(nullptr);
 
-    uint64 result = 0;
-    if (fns->getChannelIDFromChannelNames(schid, argv.data(), &result) != ERROR_ok) {
-        return 0;
+    // Fallback: walk the channel tree and match by suffix (case-insensitive).
+    // Lets the user type just the leaf ("Ruheraum") or a partial trailing
+    // path ("Lobby/AFK") even when the SDK's exact resolver bails out.
+    uint64* ids = nullptr;
+    if (fns->getChannelList(schid, &ids) != ERROR_ok || !ids) return 0;
+
+    QHash<uint64_t, QString>  nameByID;
+    QHash<uint64_t, uint64_t> parentByID;
+    for (size_t i = 0; ids[i] != 0; ++i) {
+        uint64 cid = ids[i];
+        char* nameBuf = nullptr;
+        if (fns->getChannelVariableAsString(schid, cid, CHANNEL_NAME, &nameBuf)
+                == ERROR_ok && nameBuf) {
+            nameByID.insert(cid, QString::fromUtf8(nameBuf));
+            fns->freeMemory(nameBuf);
+        }
+        uint64 pid = 0;
+        if (fns->getParentChannelOfChannel(schid, cid, &pid) == ERROR_ok) {
+            parentByID.insert(cid, pid);
+        }
     }
-    return result;
+    fns->freeMemory(ids);
+
+    uint64_t exact  = 0;
+    uint64_t suffix = 0;
+
+    const QString needle = parts.join(QLatin1Char('/'));
+
+    for (auto it = nameByID.cbegin(); it != nameByID.cend(); ++it) {
+        // Reconstruct the full path bottom-up (root first).
+        QStringList chain;
+        uint64_t cur = it.key();
+        while (cur != 0) {
+            auto nIt = nameByID.constFind(cur);
+            if (nIt == nameByID.cend()) break;
+            chain.prepend(nIt.value());
+            auto pIt = parentByID.constFind(cur);
+            cur = (pIt == parentByID.cend()) ? 0 : pIt.value();
+        }
+        if (chain.isEmpty()) continue;
+
+        const QString full = chain.join(QLatin1Char('/'));
+        if (exact == 0 && full.compare(needle, Qt::CaseInsensitive) == 0) {
+            exact = it.key();
+            continue;
+        }
+
+        // Suffix match: user-supplied segments equal the trailing segments
+        // of this channel's full path. Single-segment input therefore acts
+        // as a leaf-name lookup anywhere in the tree.
+        if (suffix == 0 && chain.size() >= parts.size()) {
+            bool ok = true;
+            for (int i = 0; i < parts.size(); ++i) {
+                const QString& want = parts.at(parts.size() - 1 - i);
+                const QString& got  = chain.at(chain.size() - 1 - i);
+                if (want.compare(got, Qt::CaseInsensitive) != 0) {
+                    ok = false;
+                    break;
+                }
+            }
+            if (ok) suffix = it.key();
+        }
+    }
+
+    return exact ? exact : suffix;
 }
 
 int TS3Bridge::moveSelfToChannelID(uint64_t channelID) {
