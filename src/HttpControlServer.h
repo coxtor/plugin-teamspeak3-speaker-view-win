@@ -15,8 +15,10 @@ class QTcpSocket;
 //     /health
 //     /mic/state, /mic/toggle
 //     /speaker/state, /speaker/toggle
-//     /away/state, /away/toggle
-//     /silent/state, /silent/toggle
+//     /away/state, /away/toggle[?channel=Lobby/AFK]
+//     /silent/state, /silent/toggle[?channel=Lobby/AFK]
+//     /channel/current
+//     /channel/move?path=Lobby/AFK
 //     /quit
 class HttpControlServer : public QObject {
     Q_OBJECT
@@ -39,7 +41,7 @@ private slots:
 
 private:
     void handleRequest(QTcpSocket* sock, const QString& method,
-                       const QString& path);
+                       const QString& fullPath);
     void writeResponse(QTcpSocket* sock, int status,
                        const QByteArray& contentType,
                        const QByteArray& body);

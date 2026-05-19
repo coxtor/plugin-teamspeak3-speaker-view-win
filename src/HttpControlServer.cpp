@@ -7,10 +7,13 @@
 #include <QtCore/QByteArray>
 #include <QtCore/QString>
 #include <QtCore/QTimer>
+#include <QtCore/QUrl>
+#include <QtCore/QUrlQuery>
 #include <QtNetwork/QHostAddress>
 #include <QtNetwork/QTcpServer>
 #include <QtNetwork/QTcpSocket>
 
+#include <cstdio>
 #include <cstdlib>
 
 HttpControlServer::HttpControlServer(QObject* parent) : QObject(parent) {}
@@ -138,11 +141,50 @@ QByteArray HttpControlServer::jsonState(const char* key, int value) const {
            + ",\"connected\":true}";
 }
 
+// Minimal JSON-string escape sufficient for TS3 channel names (control
+// chars, quotes, backslashes). UTF-8 is passed through unchanged.
+static QByteArray jsonEscape(const QString& in) {
+    QByteArray utf = in.toUtf8();
+    QByteArray out;
+    out.reserve(utf.size() + 2);
+    for (char c : utf) {
+        unsigned char u = static_cast<unsigned char>(c);
+        switch (u) {
+            case '"':  out.append("\\\""); break;
+            case '\\': out.append("\\\\"); break;
+            case '\b': out.append("\\b");  break;
+            case '\f': out.append("\\f");  break;
+            case '\n': out.append("\\n");  break;
+            case '\r': out.append("\\r");  break;
+            case '\t': out.append("\\t");  break;
+            default:
+                if (u < 0x20) {
+                    char buf[8];
+                    std::snprintf(buf, sizeof(buf), "\\u%04x", u);
+                    out.append(buf);
+                } else {
+                    out.append(static_cast<char>(u));
+                }
+        }
+    }
+    return out;
+}
+
 void HttpControlServer::handleRequest(QTcpSocket* sock, const QString& method,
-                                      const QString& path) {
+                                      const QString& fullPath) {
     Q_UNUSED(method);
 
     TS3Bridge* bridge = PluginContext::instance().bridge();
+
+    // Split "/foo?a=b&c=d" into path + decoded query map. QUrl handles the
+    // percent-decoding; we feed it just the request-target so it doesn't try
+    // to interpret the leading slash as a scheme.
+    QUrl url;
+    url.setUrl(fullPath, QUrl::TolerantMode);
+    QString path = url.path();
+    QUrlQuery query(url.query());
+    QString afkPath = query.queryItemValue(
+        QStringLiteral("channel"), QUrl::FullyDecoded);
 
     auto reply = [&](int v, const char* key) {
         // ObjC-style "send to nil returns 0" doesn't apply in C++; we just
@@ -176,7 +218,7 @@ void HttpControlServer::handleRequest(QTcpSocket* sock, const QString& method,
         return;
     }
     if (path == "/away/toggle") {
-        withBridge([](TS3Bridge* b){ return b->toggleSelfAway(); }, "away");
+        withBridge([&afkPath](TS3Bridge* b){ return b->toggleSelfAwayWithAfkPath(afkPath); }, "away");
         return;
     }
     if (path == "/away/state") {
@@ -184,11 +226,66 @@ void HttpControlServer::handleRequest(QTcpSocket* sock, const QString& method,
         return;
     }
     if (path == "/silent/toggle") {
-        withBridge([](TS3Bridge* b){ return b->toggleSelfSilentMode(); }, "silent");
+        withBridge([&afkPath](TS3Bridge* b){ return b->toggleSelfSilentModeWithAfkPath(afkPath); }, "silent");
         return;
     }
     if (path == "/silent/state") {
         withBridge([](TS3Bridge* b){ return b->selfSilentMode(); }, "silent");
+        return;
+    }
+    if (path == "/channel/current") {
+        if (!bridge) {
+            writeResponse(sock, 200, "application/json",
+                          "{\"id\":null,\"name\":null,\"connected\":false}");
+            return;
+        }
+        uint64_t cid = 0;
+        QString name;
+        int rc = bridge->currentChannelID(&cid, &name);
+        if (rc != 1) {
+            writeResponse(sock, 200, "application/json",
+                          "{\"id\":null,\"name\":null,\"connected\":false}");
+            return;
+        }
+        QByteArray body;
+        body.append("{\"id\":")
+            .append(QByteArray::number(static_cast<qulonglong>(cid)))
+            .append(",\"name\":\"")
+            .append(jsonEscape(name))
+            .append("\",\"connected\":true}");
+        writeResponse(sock, 200, "application/json", body);
+        return;
+    }
+    if (path == "/channel/move") {
+        QString p = query.queryItemValue(QStringLiteral("path"),
+                                         QUrl::FullyDecoded);
+        if (p.isEmpty()) {
+            writeResponse(sock, 400, "application/json",
+                          "{\"error\":\"missing path\"}");
+            return;
+        }
+        if (!bridge) {
+            writeResponse(sock, 200, "application/json",
+                          "{\"id\":null,\"connected\":false}");
+            return;
+        }
+        uint64_t target = bridge->resolveChannelPath(p);
+        if (target == 0) {
+            writeResponse(sock, 404, "application/json",
+                          "{\"error\":\"channel not found\",\"connected\":true}");
+            return;
+        }
+        int rc = bridge->moveSelfToChannelID(target);
+        if (rc < 0) {
+            writeResponse(sock, 500, "application/json",
+                          "{\"error\":\"move failed\",\"connected\":true}");
+            return;
+        }
+        QByteArray body;
+        body.append("{\"id\":")
+            .append(QByteArray::number(static_cast<qulonglong>(target)))
+            .append(",\"connected\":true}");
+        writeResponse(sock, 200, "application/json", body);
         return;
     }
     if (path == "/quit") {
@@ -212,6 +309,7 @@ void HttpControlServer::writeResponse(QTcpSocket* sock, int status,
     const char* reason = (status == 200) ? "OK"
                        : (status == 400) ? "Bad Request"
                        : (status == 404) ? "Not Found"
+                       : (status == 500) ? "Internal Server Error"
                                          : "Error";
     QByteArray header;
     header.reserve(256);
