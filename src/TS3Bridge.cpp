@@ -185,24 +185,30 @@ uint64_t TS3Bridge::resolveChannelPathOnMain(const QString& path) const {
     uint64_t schid = currentServerHandlerID();
     if (schid == 0) return 0;
 
-    // Pure-numeric input is interpreted as a literal channelID. Useful when
-    // the user has the ID handy from the TS3 server's channel admin and
-    // doesn't want to fight name resolution. We verify the channel actually
-    // exists by reading its CHANNEL_NAME — if that fails we fall through to
-    // the regular path lookup so e.g. a channel literally named "42" still
-    // works.
+    // Pure-numeric input is interpreted as a literal channelID. We MUST NOT
+    // call getChannelVariableAsString on an unverified ID — TS3's SDK has
+    // been observed to abort the entire client when fed a non-existent or
+    // pseudo-root ID (e.g. 1, 7) even from the GUI thread, with no crash
+    // report. Validate via getChannelList membership instead; if the ID
+    // doesn't appear we fall through to the name resolver so a channel
+    // literally named "42" still works.
     {
         const QString trimmedAll = path.trimmed();
         bool numeric = false;
         const qulonglong n = trimmedAll.toULongLong(&numeric);
         if (numeric && n > 0) {
-            char* nameBuf = nullptr;
-            if (fns->getChannelVariableAsString(
-                    schid, static_cast<uint64>(n), CHANNEL_NAME, &nameBuf)
-                    == ERROR_ok) {
-                if (nameBuf) fns->freeMemory(nameBuf);
-                return static_cast<uint64_t>(n);
+            bool exists = false;
+            uint64* ids = nullptr;
+            if (fns->getChannelList(schid, &ids) == ERROR_ok && ids) {
+                for (size_t i = 0; ids[i] != 0; ++i) {
+                    if (ids[i] == static_cast<uint64>(n)) {
+                        exists = true;
+                        break;
+                    }
+                }
+                fns->freeMemory(ids);
             }
+            if (exists) return static_cast<uint64_t>(n);
         }
     }
 
