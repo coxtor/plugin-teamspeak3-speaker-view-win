@@ -221,30 +221,12 @@ uint64_t TS3Bridge::resolveChannelPathOnMain(const QString& path) const {
     }
     if (parts.isEmpty()) return 0;
 
-    // First attempt: TS3's own exact-path resolver. Cheap when it works,
-    // requires the full path from the server root and an exact name match.
-    // Fails for partial paths like a bare leaf name and for channels with
-    // quirky names (spacers, special characters, hidden whitespace).
-    {
-        std::vector<QByteArray> storage;
-        storage.reserve(static_cast<size_t>(parts.size()));
-        std::vector<char*> argv;
-        argv.reserve(static_cast<size_t>(parts.size()) + 1);
-        for (const QString& seg : parts) {
-            storage.emplace_back(seg.toUtf8());
-            argv.push_back(storage.back().data());
-        }
-        argv.push_back(nullptr);
-        uint64 result = 0;
-        if (fns->getChannelIDFromChannelNames(schid, argv.data(), &result)
-                == ERROR_ok && result != 0) {
-            return result;
-        }
-    }
-
-    // Fallback: walk the channel tree and match by suffix (case-insensitive).
-    // Lets the user type just the leaf ("Ruheraum") or a partial trailing
-    // path ("Lobby/AFK") even when the SDK's exact resolver bails out.
+    // We deliberately do NOT call getChannelIDFromChannelNames here. The
+    // SDK has been observed to hard-crash the TS3 client when the input
+    // doesn't correspond to a real channel (bare numeric segment, name
+    // with spacer-like characters, etc.). The manual tree-walk below
+    // is strictly safer: enumerate the live channel list ourselves and
+    // match against the names we already hold.
     uint64* ids = nullptr;
     if (fns->getChannelList(schid, &ids) != ERROR_ok || !ids) return 0;
 
