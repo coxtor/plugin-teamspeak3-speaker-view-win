@@ -63,6 +63,13 @@ private:
     int toggleSelfFlag(int flag);
     int readSelfFlag(int flag) const;
 
+    // The actual implementations run on the GUI thread. The public methods
+    // funnel through a runOnMain helper (Qt::BlockingQueuedConnection) so
+    // SDK channel-tree calls are never invoked from the HTTP worker thread.
+    uint64_t resolveChannelPathOnMain(const QString& path) const;
+    int      moveSelfToChannelIDOnMain(uint64_t channelID);
+    int      currentChannelIDOnMain(uint64_t* outID, QString* outName) const;
+
     // Channel the local client was in *before* the AFK-aware toggle moved it.
     // Set on the ON-transition of toggleSelf{Away,SilentMode}WithAfkPath,
     // consumed and cleared on the OFF transition.

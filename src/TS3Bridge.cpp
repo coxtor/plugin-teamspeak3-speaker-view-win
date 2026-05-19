@@ -6,6 +6,7 @@
 #include <QtCore/QHash>
 #include <QtCore/QMetaObject>
 #include <QtCore/QStringList>
+#include <QtCore/QThread>
 
 #include <cstring>
 #include <string>
@@ -153,7 +154,31 @@ int TS3Bridge::selfSilentMode() const {
     return selfMicMuted();
 }
 
+namespace {
+// Run a callable synchronously on the GUI thread. TS3's channel-tree SDK
+// calls (getChannelList, getChannelVariableAsString for channels,
+// requestClientMove) are not safe to invoke from the HTTP worker thread —
+// doing so has been observed to crash the TS3 client without producing a
+// crash report. All channel-related entry points below funnel through this.
+template <typename F>
+auto runOnMain(F&& fn) -> decltype(fn()) {
+    using R = decltype(fn());
+    QObject* target = QCoreApplication::instance();
+    if (!target || QThread::currentThread() == target->thread()) {
+        return fn();
+    }
+    R result{};
+    QMetaObject::invokeMethod(target, [&]() { result = fn(); },
+                              Qt::BlockingQueuedConnection);
+    return result;
+}
+} // namespace
+
 uint64_t TS3Bridge::resolveChannelPath(const QString& path) const {
+    return runOnMain([this, &path]() { return resolveChannelPathOnMain(path); });
+}
+
+uint64_t TS3Bridge::resolveChannelPathOnMain(const QString& path) const {
     if (path.isEmpty()) return 0;
     const TS3Functions* fns = PluginContext::instance().ts3Functions();
     if (!fns) return 0;
@@ -279,6 +304,10 @@ uint64_t TS3Bridge::resolveChannelPath(const QString& path) const {
 }
 
 int TS3Bridge::moveSelfToChannelID(uint64_t channelID) {
+    return runOnMain([this, channelID]() { return moveSelfToChannelIDOnMain(channelID); });
+}
+
+int TS3Bridge::moveSelfToChannelIDOnMain(uint64_t channelID) {
     if (channelID == 0) return -1;
     const TS3Functions* fns = PluginContext::instance().ts3Functions();
     if (!fns) return -1;
@@ -292,29 +321,25 @@ int TS3Bridge::moveSelfToChannelID(uint64_t channelID) {
     // can hard-crash the TS3 client.
     bool exists = false;
     bool spacer = false;
-    {
-        uint64* ids = nullptr;
-        if (fns->getChannelList(schid, &ids) == ERROR_ok && ids) {
-            for (size_t i = 0; ids[i] != 0; ++i) {
-                if (ids[i] == channelID) {
-                    exists = true;
-                    char* nameBuf = nullptr;
-                    if (fns->getChannelVariableAsString(
-                            schid, channelID, CHANNEL_NAME, &nameBuf)
-                            == ERROR_ok && nameBuf) {
-                        // TS3 spacer channel names look like "[*spacerN]..."
-                        // or "[spacerN]..." — they aren't joinable.
-                        if (std::strncmp(nameBuf, "[*spacer", 8) == 0
-                            || std::strncmp(nameBuf, "[spacer",  7) == 0) {
-                            spacer = true;
-                        }
-                        fns->freeMemory(nameBuf);
+    uint64* ids = nullptr;
+    if (fns->getChannelList(schid, &ids) == ERROR_ok && ids) {
+        for (size_t i = 0; ids[i] != 0; ++i) {
+            if (ids[i] == channelID) {
+                exists = true;
+                char* nameBuf = nullptr;
+                if (fns->getChannelVariableAsString(
+                        schid, channelID, CHANNEL_NAME, &nameBuf)
+                        == ERROR_ok && nameBuf) {
+                    if (std::strncmp(nameBuf, "[*spacer", 8) == 0
+                        || std::strncmp(nameBuf, "[spacer",  7) == 0) {
+                        spacer = true;
                     }
-                    break;
+                    fns->freeMemory(nameBuf);
                 }
+                break;
             }
-            fns->freeMemory(ids);
         }
+        fns->freeMemory(ids);
     }
     if (!exists || spacer) return -1;
 
@@ -326,24 +351,26 @@ int TS3Bridge::moveSelfToChannelID(uint64_t channelID) {
         return 1;
     }
 
-    // Dispatch the actual move onto the GUI thread via QMetaObject::invokeMethod.
-    // requestClientMove drives TS3's network/client layer, which has been
-    // observed to crash when invoked from the HTTP worker thread on certain
-    // target IDs. We've already validated reachability above, so reporting
-    // success synchronously is fine — failures surface in TS3's own UI.
-    QMetaObject::invokeMethod(QCoreApplication::instance(), [channelID, this]() {
-        const TS3Functions* fnsMain = PluginContext::instance().ts3Functions();
-        if (!fnsMain) return;
-        uint64_t schidMain = currentServerHandlerID();
-        if (schidMain == 0) return;
-        anyID meMain = 0;
-        if (fnsMain->getClientID(schidMain, &meMain) != ERROR_ok) return;
-        fnsMain->requestClientMove(schidMain, meMain, channelID, "", nullptr);
-    }, Qt::QueuedConnection);
+    if (fns->requestClientMove(schid, me, channelID, "", nullptr) != ERROR_ok) {
+        return -1;
+    }
     return 1;
 }
 
 int TS3Bridge::currentChannelID(uint64_t* outID, QString* outName) const {
+    int rc = -1;
+    uint64_t cid = 0;
+    QString name;
+    runOnMain([this, &rc, &cid, &name]() {
+        rc = currentChannelIDOnMain(&cid, &name);
+        return rc;
+    });
+    if (outID)   *outID   = cid;
+    if (outName) *outName = name;
+    return rc;
+}
+
+int TS3Bridge::currentChannelIDOnMain(uint64_t* outID, QString* outName) const {
     const TS3Functions* fns = PluginContext::instance().ts3Functions();
     if (!fns) return -1;
     uint64_t schid = currentServerHandlerID();
